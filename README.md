@@ -1,5 +1,7 @@
 # Doubao Sync
 
+[简体中文](README_zh.md)
+
 Sync your Doubao conversations into local Obsidian Markdown notes. This first desktop-only version has an in-app login window, manual and scheduled sync, source-aware note updates, and a reviewable result notice. It uses the same naming and frontmatter style as Dedao Brain Sync.
 
 ## Install for local testing

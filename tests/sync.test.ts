@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { syncConversations, type SyncPort } from '../src/sync';
+import { DoubaoAuthError } from '../src/api';
 import type { Conversation, Message } from '../src/data';
 
 const conversation: Conversation = { id: '1234567890123456789', title: '豆包话题', created: '1700000000', modified: '1700000100' };
@@ -53,6 +54,18 @@ describe('sync', () => {
     const result = await syncConversations(f.port, {}, '豆包');
     expect(result.failed).toBe(1);
     expect(result.checkpoints).toEqual({});
+    expect(f.files.size).toBe(0);
+  });
+
+  it('stops the batch immediately when login expires', async () => {
+    let requests = 0;
+    const f = fixture();
+    await expect(syncConversations({
+      ...f.port,
+      list: async () => [conversation, { ...conversation, id: '2234567890123456789' }],
+      messages: async () => { requests++; throw new DoubaoAuthError(); },
+    }, {}, '豆包')).rejects.toThrow(/重新登录/);
+    expect(requests).toBe(1);
     expect(f.files.size).toBe(0);
   });
 });

@@ -4,6 +4,10 @@ const PARTITION = 'persist:doubao-sync';
 const CHAT_URL = 'https://www.doubao.com/chat/';
 const MAX_PAGES_PER_CONVERSATION = 100;
 
+export class DoubaoAuthError extends Error {
+  constructor() { super('豆包登录已失效，请重新登录'); }
+}
+
 interface WebContents {
   executeJavaScript(script: string): Promise<unknown>;
   setWindowOpenHandler(handler: () => { action: 'deny' }): void;
@@ -157,7 +161,7 @@ export class DoubaoPage {
       return { status: response.status, text: await response.text() };
     })()`;
     const result = await this.webContents.executeJavaScript(script) as { status: number; text: string };
-    if (result.status === 401 || result.status === 403) throw new Error('豆包登录已失效，请重新登录');
+    if (result.status === 401 || result.status === 403) throw new DoubaoAuthError();
     if (result.status !== 200) throw new Error(`豆包接口 HTTP ${result.status}`);
     return parseResponse(result.text);
   }

@@ -1,4 +1,5 @@
 import { mergeManagedNote, renderNote, type Conversation, type Message } from './data';
+import { DoubaoAuthError } from './api';
 
 export interface SyncPort {
   list(): Promise<Conversation[]>;
@@ -57,6 +58,7 @@ export async function syncConversations(
         if (conversation.modified) result.checkpoints[conversation.id] = conversation.modified;
       }
     } catch (error) {
+      if (error instanceof DoubaoAuthError) throw error;
       result.failed++;
       result.errors.push({ id: conversation.id, message: error instanceof Error ? error.message : String(error) });
     }
