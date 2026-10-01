@@ -1,0 +1,21 @@
+.doubao-settings {
+  --doubao-primary-input-width: 360px;
+}
+.doubao-settings-desc {
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  margin: 0 0 16px;
+}
+.doubao-settings-status-bar {
+  display: flex;
+  align-items: center;
+  min-height: 52px;
+  margin-bottom: 20px;
+  padding: 12px 14px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  background: var(--background-secondary);
+}
+.doubao-settings .setting-item-control input[type="text"] {
+  width: min(100%, var(--doubao-primary-input-width));
+}
