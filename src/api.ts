@@ -1,8 +1,9 @@
 import { parseConversationList, parseMessagePage, type Conversation, type Message } from './data';
+import { verifyLoginSession, watchLogin } from './login';
 
 const PARTITION = 'persist:doubao-sync';
 const CHAT_URL = 'https://www.doubao.com/chat/';
-const MAX_PAGES_PER_CONVERSATION = 100;
+const MAX_PAGES_PER_CONVERSATION = 1000;
 
 export class DoubaoAuthError extends Error {
   constructor() { super('豆包登录已失效，请重新登录'); }
@@ -18,6 +19,7 @@ interface Window {
   show(): void;
   isDestroyed(): boolean;
   close(): void;
+  once(event: 'closed', callback: () => void): void;
 }
 interface Session {
   cookies: { get(filter: { url: string }): Promise<Array<{ name: string }>> };
@@ -63,14 +65,18 @@ export function buildRecentRequest(limit: number): Record<string, unknown> {
 
 export function buildMessageRequest(conversationId: string, anchor: string): Record<string, unknown> {
   if (!/^\d+$/.test(conversationId) || !/^\d+$/.test(anchor)) throw new Error('无效的豆包会话或消息游标');
+  const cursor = Number(anchor);
+  if (!Number.isSafeInteger(cursor)) throw new Error('豆包消息游标超出精确表示范围');
   return envelope(3100, { pull_singe_chain_uplink_body: {
     conversation_id: conversationId,
-    anchor_index: anchor,
+    anchor_index: cursor,
     conversation_type: 3,
     direction: 1,
     limit: 50,
     ext: {},
     filter: { index_list: [] },
+    evaluate_ab_params: '',
+    evaluate_common_params: '',
   } });
 }
 
@@ -86,6 +92,9 @@ export class DoubaoApiClient {
   private readonly electron = loadElectron();
   private readonly session = this.electron.session.fromPartition(PARTITION);
   private loginWindow: Window | null = null;
+  private stopLoginWatch: (() => void) | null = null;
+
+  constructor(private readonly onLogin: () => void = () => {}) {}
 
   openLogin(): void {
     if (this.loginWindow && !this.loginWindow.isDestroyed()) {
@@ -94,6 +103,18 @@ export class DoubaoApiClient {
     }
     const window = this.createWindow(true);
     this.loginWindow = window;
+    this.stopLoginWatch = watchLogin(() => verifyLoginSession(
+      () => this.isLoggedIn(),
+      () => new DoubaoPage(window.webContents).conversations(),
+    ), () => {
+      if (!window.isDestroyed()) window.close();
+      this.onLogin();
+    });
+    window.once('closed', () => {
+      this.stopLoginWatch?.();
+      this.stopLoginWatch = null;
+      this.loginWindow = null;
+    });
     void window.loadURL(CHAT_URL).catch(() => {
       if (!window.isDestroyed()) window.close();
     });
@@ -108,6 +129,13 @@ export class DoubaoApiClient {
     if (this.loginWindow && !this.loginWindow.isDestroyed()) this.loginWindow.close();
     this.loginWindow = null;
     await this.session.clearStorageData();
+  }
+
+  dispose(): void {
+    this.stopLoginWatch?.();
+    this.stopLoginWatch = null;
+    if (this.loginWindow && !this.loginWindow.isDestroyed()) this.loginWindow.close();
+    this.loginWindow = null;
   }
 
   async withAuthenticatedPage<T>(action: (client: DoubaoPage) => Promise<T>): Promise<T> {
@@ -178,14 +206,16 @@ export class DoubaoPage {
     for (let page = 0; page < MAX_PAGES_PER_CONVERSATION; page++) {
       const response = await this.post('/im/chain/single', buildMessageRequest(conversationId, anchor));
       const parsed = parseMessagePage(response);
+      const previousCount = messages.length;
       for (const message of parsed.messages) if (!seen.has(message.id)) {
         seen.add(message.id);
         messages.push(message);
       }
       if (!parsed.hasMore) return messages.sort((a, b) => BigInt(a.index) < BigInt(b.index) ? -1 : 1);
+      if (messages.length === previousCount) throw new Error('豆包消息分页重复或没有有效消息，未写入不完整内容');
       if (!parsed.nextAnchor || BigInt(parsed.nextAnchor) >= BigInt(anchor)) throw new Error('豆包消息分页游标异常');
       anchor = parsed.nextAnchor;
     }
-    throw new Error('豆包对话超过单次同步页数上限，未写入不完整内容');
+    throw new Error(`豆包对话超过 ${MAX_PAGES_PER_CONVERSATION} 页上限（已读取 ${messages.length} 条消息），未写入不完整内容`);
   }
 }

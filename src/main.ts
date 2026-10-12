@@ -1,5 +1,6 @@
 import { Notice, Plugin, PluginSettingTab, Setting, TFile, normalizePath, type App } from 'obsidian';
 import { DoubaoApiClient } from './api';
+import { buildDoubaoIndex } from './vault-index';
 import { syncConversations, type SyncPort, type SyncResult } from './sync';
 
 interface Settings {
@@ -26,11 +27,13 @@ export default class DoubaoSyncPlugin extends Plugin {
   private syncing = false;
   private interval: number | null = null;
   private statusEl: HTMLElement | null = null;
+  private settingsTab: DoubaoSettingsTab | null = null;
 
   async onload(): Promise<void> {
     const saved = await this.loadData() as Partial<Settings> | null;
     this.settings = { ...DEFAULT_SETTINGS, ...saved, checkpoints: saved?.checkpoints ?? {} };
-    this.addSettingTab(new DoubaoSettingsTab(this.app, this));
+    this.settingsTab = new DoubaoSettingsTab(this.app, this);
+    this.addSettingTab(this.settingsTab);
     this.addCommand({ id: 'sync-now', name: '立即同步豆包对话', callback: () => { void this.syncNow(); } });
     this.addCommand({ id: 'open-login', name: '登录豆包', callback: () => { this.openLogin(); } });
     this.addRibbonIcon('messages-square', '同步豆包对话', () => { void this.syncNow(); });
@@ -44,16 +47,21 @@ export default class DoubaoSyncPlugin extends Plugin {
 
   onunload(): void {
     if (this.interval !== null) window.clearInterval(this.interval);
+    this.api?.dispose();
   }
 
   private client(): DoubaoApiClient {
-    return this.api ??= new DoubaoApiClient();
+    return this.api ??= new DoubaoApiClient(() => {
+      this.statusEl?.setText('豆包同步：已连接');
+      if (this.settingsTab?.containerEl.isConnected) this.settingsTab.display();
+      new Notice('豆包登录成功，点击「同步」即可保存对话。');
+    });
   }
 
   openLogin(): void {
     try {
       this.client().openLogin();
-      new Notice('请在豆包窗口完成登录；登录后关闭窗口，再点击「立即同步」。');
+      new Notice('请在豆包窗口完成登录；成功后窗口会自动关闭，再点击「同步」。');
     } catch (error) {
       new Notice(error instanceof Error ? error.message : String(error));
     }
@@ -170,22 +178,10 @@ export default class DoubaoSyncPlugin extends Plugin {
   }
 
   private async buildUidIndex(): Promise<Map<string, string[]>> {
-    const index = new Map<string, string[]>();
-    for (const file of this.app.vault.getMarkdownFiles()) {
-      const frontmatterCache = this.app.metadataCache.getFileCache(file)?.frontmatter;
-      if (frontmatterCache && (frontmatterCache.source !== '豆包' || frontmatterCache.doubao_sync_schema !== 1)) continue;
-      const cached = frontmatterCache?.uid;
-      let id = typeof cached === 'string' ? cached : '';
-      if (!id) {
-        const content = await this.app.vault.cachedRead(file);
-        const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---/.exec(content)?.[1];
-        if (!frontmatter || !/^source:\s*豆包\s*$/m.test(frontmatter) || !/^doubao_sync_schema:\s*1\s*$/m.test(frontmatter)) continue;
-        id = frontmatter ? /^uid:\s*"([^"]+)"/m.exec(frontmatter)?.[1] ?? '' : '';
-      }
-      if (!id) continue;
-      index.set(id, [...(index.get(id) ?? []), file.path]);
-    }
-    return index;
+    const files = this.app.vault.getMarkdownFiles();
+    const byPath = new Map(files.map(file => [file.path, file]));
+    return buildDoubaoIndex(files.map(file => ({ path: file.path, frontmatter: this.app.metadataCache.getFileCache(file)?.frontmatter })),
+      path => this.app.vault.cachedRead(byPath.get(path)!));
   }
 }
 

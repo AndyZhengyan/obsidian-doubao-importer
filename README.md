@@ -10,14 +10,14 @@ Sync your Doubao conversations into local Obsidian Markdown notes. This first de
 2. Create `<your-vault>/.obsidian/plugins/doubao-sync/`.
 3. Copy **only** `main.js`, `manifest.json`, and `styles.css` into that directory.
 4. In Obsidian, enable Doubao Sync under Community plugins and reload the app.
-5. Open Settings → Doubao Sync → Log in to Doubao. Complete the normal login in the opened window, close it, then click Sync.
+5. Open Settings → Doubao Sync → Log in to Doubao. Complete the normal login; the window closes automatically, then click Sync.
 
 The plugin stores the web session in Electron's persistent local partition. It does not copy Cookie values into plugin settings or log them.
 
 ## Current behavior
 
 - Syncs the most recent conversations returned by Doubao's web conversation endpoint, up to 200 per run.
-- Paginates each conversation's history. A conversation that exceeds 100 message pages is skipped rather than written incompletely.
+- Paginates each conversation's history. A conversation that exceeds 1000 message pages or returns a repeated page is skipped rather than written incompletely.
 - Saves one Markdown note per conversation under `豆包/对话` by default.
 - Updates notes by their `uid`, even if moved or renamed. It preserves frontmatter fields outside plugin ownership and text outside the source-body markers.
 - Skips conversations whose remote update time matches the last successful checkpoint. A failed conversation keeps its previous checkpoint.
@@ -25,7 +25,7 @@ The plugin stores the web session in Electron's persistent local partition. It d
 - Leaves image and file URLs in the note when the web payload supplies them; it does not download media yet.
 - Shows a warning when the returned conversation list reaches the 200-item limit. A shorter list does not prove complete account coverage.
 
-Doubao's web endpoints are private and can change. This release has not yet been verified against the owner's logged-in account. If the API format changes, sync stops with a visible error instead of treating the response as empty.
+Doubao's web endpoints are private and can change. On 2026-10-13, local acceptance on Obsidian 1.13.7 saved the 49 conversations returned by the owner's account, totaling 16,595 messages. This does not establish full account-history coverage. See [local acceptance](docs/LOCAL_ACCEPTANCE.md). If the API format changes, sync stops with a visible error instead of treating the response as empty.
 
 ## Note format
 
