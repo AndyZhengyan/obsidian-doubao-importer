@@ -1,21 +1,68 @@
-.doubao-settings {
-  --doubao-primary-input-width: 360px;
-}
-.doubao-settings-desc {
-  color: var(--text-muted);
-  font-size: var(--font-ui-small);
-  margin: 0 0 16px;
-}
-.doubao-settings-status-bar {
-  display: flex;
-  align-items: center;
-  min-height: 52px;
-  margin-bottom: 20px;
-  padding: 12px 14px;
-  border: 1px solid var(--background-modifier-border);
-  border-radius: var(--radius-m);
+/* Visual rhythm adapted from Dedao Brain Sync (MIT),
+   commit 4a5e2cc7c82a8f03b3169e76db1ebbe9a5b09c95. All rules are plugin-scoped. */
+.doubao-settings { --doubao-primary-input-width: 360px; color: var(--text-normal); }
+.doubao-settings .doubao-settings-header h2 { margin: 0 0 4px; }
+.doubao-settings .doubao-settings-header small { color: var(--text-muted); font-size: var(--font-ui-small); font-weight: normal; }
+.doubao-settings .doubao-settings-desc,
+.doubao-history .doubao-settings-desc { color: var(--text-muted); font-size: var(--font-ui-small); margin: 0 0 16px; }
+.doubao-settings .doubao-settings-status-bar {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;
+  gap: 12px; margin-bottom: 20px; padding: 12px 14px;
+  border: 1px solid var(--background-modifier-border); border-radius: var(--radius-m);
   background: var(--background-secondary);
 }
-.doubao-settings .setting-item-control input[type="text"] {
-  width: min(100%, var(--doubao-primary-input-width));
+.doubao-settings .doubao-status-copy,
+.doubao-settings .doubao-status-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; }
+.doubao-settings .doubao-status-copy span { color: var(--text-muted); font-size: var(--font-ui-small); }
+.doubao-settings .doubao-status-copy .doubao-connection-connected { color: var(--color-green); }
+.doubao-settings .doubao-status-copy .doubao-connection-expired,
+.doubao-settings .doubao-status-copy .doubao-connection-error { color: var(--text-error); }
+.doubao-settings .doubao-connection-message { margin: 0; width: 100%; overflow-wrap: anywhere; font-size: var(--font-ui-small); }
+.doubao-settings .doubao-settings-section > h3 { margin: 8px 0 14px; font-size: var(--font-ui-medium); }
+.doubao-settings .doubao-setting-item { display: flex; align-items: flex-start; gap: 16px; margin-bottom: 20px; }
+.doubao-settings .doubao-setting-info { flex: 0 0 180px; }
+.doubao-settings .doubao-setting-name { font-weight: 600; margin-bottom: 4px; }
+.doubao-settings .doubao-setting-description { color: var(--text-muted); font-size: var(--font-ui-small); line-height: 1.5; }
+.doubao-settings .doubao-setting-control { display: flex; flex: 1; min-width: 0; justify-content: flex-end; }
+.doubao-settings .doubao-input-stack { width: 100%; max-width: var(--doubao-primary-input-width); display: flex; flex-direction: column; gap: 8px; }
+.doubao-settings .doubao-input-stack input[type="text"] { width: 100%; }
+.doubao-settings .doubao-scheduled-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.doubao-settings .doubao-setting-summary { color: var(--text-muted); font-size: var(--font-ui-smaller); }
+.doubao-settings .doubao-scheduled-details:not([hidden]) { display: flex; flex-direction: column; gap: 12px; margin-top: 8px; }
+.doubao-settings .doubao-disclosure { font-size: var(--font-ui-small); }
+.doubao-settings .doubao-task { padding: 12px 14px; margin: 0 0 20px; border: 1px solid var(--background-modifier-border); border-radius: var(--radius-m); background: var(--background-secondary); }
+.doubao-settings .doubao-task-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.doubao-settings .doubao-task-title { margin-top: 8px; overflow-wrap: anywhere; }
+.doubao-settings .doubao-task-counts { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 8px; color: var(--text-muted); font-size: var(--font-ui-small); }
+.doubao-settings .doubao-task-activity { height: 4px; margin-top: 12px; border-radius: var(--radius-s); background: var(--background-modifier-border); }
+.doubao-settings .doubao-task-success strong { color: var(--color-green); }
+.doubao-settings .doubao-task-partial strong { color: var(--color-yellow); }
+.doubao-settings .doubao-task-failed strong { color: var(--text-error); }
+.doubao-settings .doubao-error,
+.doubao-history .doubao-error { color: var(--text-error); overflow-wrap: anywhere; }
+.doubao-settings .doubao-guidance { padding: 12px; background: var(--background-secondary); border-radius: var(--radius-m); }
+.doubao-settings .doubao-advanced { border-top: 1px solid var(--background-modifier-border); padding-top: 14px; }
+.doubao-settings .doubao-advanced summary { cursor: pointer; font-weight: 600; }
+.doubao-settings .doubao-advanced p { color: var(--text-muted); font-size: var(--font-ui-small); line-height: 1.6; }
+.doubao-history .doubao-history-entry { border: 1px solid var(--background-modifier-border); border-radius: var(--radius-m); margin-bottom: 12px; }
+.doubao-history .doubao-history-entry summary { padding: 12px; cursor: pointer; line-height: 1.6; overflow-wrap: anywhere; }
+.doubao-history .doubao-history-success summary { color: var(--color-green); }
+.doubao-history .doubao-history-partial summary,
+.doubao-history .doubao-history-warning { color: var(--color-yellow); }
+.doubao-history .doubao-history-failed summary { color: var(--text-error); }
+.doubao-history .doubao-history-body { padding: 0 12px 12px; }
+.doubao-history .doubao-history-body p { margin: 6px 0; font-size: var(--font-ui-small); }
+.doubao-history .doubao-history-items { margin: 12px 0 0; padding: 0; list-style: none; }
+.doubao-history .doubao-history-item { padding: 8px 0; border-top: 1px solid var(--background-modifier-border); overflow-wrap: anywhere; }
+.doubao-history .doubao-history-item-label { display: inline-block; color: var(--text-muted); font-size: var(--font-ui-small); margin-right: 10px; }
+.doubao-history .doubao-history-item-failed .doubao-history-item-label { color: var(--text-error); }
+.doubao-history .doubao-history-pagination { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+@media (max-width: 700px) {
+  .doubao-settings .doubao-setting-item { flex-direction: column; gap: 8px; }
+  .doubao-settings .doubao-setting-info { flex-basis: auto; }
+  .doubao-settings .doubao-setting-control { justify-content: flex-start; width: 100%; }
+  .doubao-settings .doubao-input-stack { max-width: none; }
+  .doubao-settings .doubao-settings-status-bar,
+  .doubao-settings .doubao-status-copy { align-items: flex-start; flex-direction: column; }
+  .doubao-settings .doubao-task-heading { align-items: flex-start; flex-wrap: wrap; }
 }

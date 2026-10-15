@@ -2,7 +2,7 @@
 
 [简体中文](README_zh.md)
 
-Sync your Doubao conversations into local Obsidian Markdown notes. This first desktop-only version has an in-app login window, manual and scheduled sync, source-aware note updates, and a reviewable result notice. It uses the same naming and frontmatter style as Dedao Brain Sync.
+Sync your Doubao conversations into local Obsidian Markdown notes. This desktop plugin includes local login, manual/scheduled sync, live message-page progress, cancellation, and 30-day per-conversation history. Its settings components and interaction patterns are adapted from Dedao Brain Sync; see [reuse boundaries](docs/REUSE.md).
 
 ## Install for local testing
 
@@ -20,7 +20,9 @@ The plugin stores the web session in Electron's persistent local partition. It d
 - Paginates each conversation's history. A conversation that exceeds 1000 message pages or returns a repeated page is skipped rather than written incompletely.
 - Saves one Markdown note per conversation under `豆包/对话` by default.
 - Updates notes by their `uid`, even if moved or renamed. It preserves frontmatter fields outside plugin ownership and text outside the source-body markers.
-- Skips conversations whose remote update time matches the last successful checkpoint. A failed conversation keeps its previous checkpoint.
+- Checks both the remote update time and a fingerprint of the latest message page before skipping an unchanged conversation. Upgrading an older installation safely re-reads each discovered conversation once to initialize these fingerprints.
+- Cancellation and authentication failures preserve completed outcomes/checkpoints. Incomplete conversations are not written. Unloading cancels outstanding requests and closes hidden windows.
+- History keeps 30 days of timestamps, source, duration, counts, and per-conversation results, without storing message bodies or credentials.
 - Keeps local notes when a remote conversation disappears.
 - Leaves image and file URLs in the note when the web payload supplies them; it does not download media yet.
 - Shows a warning when the returned conversation list reaches the 200-item limit. A shorter list does not prove complete account coverage.

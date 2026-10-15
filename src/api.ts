@@ -1,5 +1,7 @@
 import { parseConversationList, parseMessagePage, type Conversation, type Message } from './data';
 import { verifyLoginSession, watchLogin } from './login';
+import { createHash } from 'crypto';
+import { abortable, checkCancelled } from './cancellation';
 
 const PARTITION = 'persist:doubao-sync';
 const CHAT_URL = 'https://www.doubao.com/chat/';
@@ -93,6 +95,7 @@ export class DoubaoApiClient {
   private readonly session = this.electron.session.fromPartition(PARTITION);
   private loginWindow: Window | null = null;
   private stopLoginWatch: (() => void) | null = null;
+  private readonly windows = new Set<Window>();
 
   constructor(private readonly onLogin: () => void = () => {}) {}
 
@@ -136,17 +139,26 @@ export class DoubaoApiClient {
     this.stopLoginWatch = null;
     if (this.loginWindow && !this.loginWindow.isDestroyed()) this.loginWindow.close();
     this.loginWindow = null;
+    for (const window of this.windows) if (!window.isDestroyed()) window.close();
+    this.windows.clear();
   }
 
-  async withAuthenticatedPage<T>(action: (client: DoubaoPage) => Promise<T>): Promise<T> {
-    if (!await this.isLoggedIn()) throw new Error('请先在设置中登录豆包');
+  async withAuthenticatedPage<T>(action: (client: DoubaoPage) => Promise<T>, signal?: AbortSignal): Promise<T> {
+    checkCancelled(signal);
+    if (!await this.isLoggedIn()) throw new DoubaoAuthError();
+    checkCancelled(signal);
     const window = this.createWindow(false);
+    const close = () => { if (!window.isDestroyed()) window.close(); };
+    signal?.addEventListener('abort', close, { once: true });
     try {
-      await window.loadURL(CHAT_URL);
-      const client = new DoubaoPage(window.webContents);
+      await abortable(window.loadURL(CHAT_URL), signal);
+      checkCancelled(signal);
+      const client = new DoubaoPage(window.webContents, signal);
+      // Page requests observe cancellation; let the action return its partial results.
       return await action(client);
     } finally {
-      if (!window.isDestroyed()) window.close();
+      signal?.removeEventListener('abort', close);
+      close();
     }
   }
 
@@ -164,15 +176,19 @@ export class DoubaoApiClient {
         webviewTag: false,
       },
     });
+    this.windows.add(window);
+    window.once('closed', () => this.windows.delete(window));
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     return window;
   }
 }
 
 export class DoubaoPage {
-  constructor(private readonly webContents: WebContents) {}
+  private firstPages = new Map<string, ReturnType<typeof parseMessagePage>>();
+  constructor(private readonly webContents: WebContents, private readonly signal?: AbortSignal) {}
 
   private async post(path: string, body: Record<string, unknown>): Promise<unknown> {
+    checkCancelled(this.signal);
     const params = new URLSearchParams({
       version_code: '20800', language: 'zh', device_platform: 'web', aid: '497858',
       real_aid: '497858', pkg_type: 'release_version', region: 'CN',
@@ -182,13 +198,14 @@ export class DoubaoPage {
     const url = `https://www.doubao.com${path}?${params}`;
     const script = `(async () => {
       const response = await fetch(${JSON.stringify(url)}, {
-        method: 'POST', credentials: 'include',
+        method: 'POST', credentials: 'include', signal: AbortSignal.timeout(30000),
         headers: { 'Content-Type': 'application/json; encoding=utf-8', 'agw-js-conv': 'str' },
         body: ${JSON.stringify(JSON.stringify(body))}
       });
       return { status: response.status, text: await response.text() };
     })()`;
-    const result = await this.webContents.executeJavaScript(script) as { status: number; text: string };
+    const result = await abortable(this.webContents.executeJavaScript(script), this.signal) as { status: number; text: string };
+    checkCancelled(this.signal);
     if (result.status === 401 || result.status === 403) throw new DoubaoAuthError();
     if (result.status !== 200) throw new Error(`豆包接口 HTTP ${result.status}`);
     return parseResponse(result.text);
@@ -199,18 +216,34 @@ export class DoubaoPage {
     return parseConversationList(response);
   }
 
-  async messages(conversationId: string): Promise<Message[]> {
+  async version(conversationId: string): Promise<string> {
+    const response = await this.post('/im/chain/single', buildMessageRequest(conversationId, '9007199254740991'));
+    const page = parseMessagePage(response);
+    if (page.hasMore && !page.messages.length) throw new Error('豆包消息版本页为空，未写入不完整内容');
+    this.firstPages.set(conversationId, page);
+    const messages = [...page.messages].sort((a, b) => BigInt(a.index) < BigInt(b.index) ? -1 : BigInt(a.index) > BigInt(b.index) ? 1 : a.id.localeCompare(b.id));
+    return createHash('sha256').update(JSON.stringify(messages)).digest('hex');
+  }
+
+  async messages(conversationId: string, onPage?: (page: number, count: number) => void): Promise<Message[]> {
     const seen = new Set<string>();
     const messages: Message[] = [];
     let anchor = '9007199254740991';
     for (let page = 0; page < MAX_PAGES_PER_CONVERSATION; page++) {
-      const response = await this.post('/im/chain/single', buildMessageRequest(conversationId, anchor));
-      const parsed = parseMessagePage(response);
+      checkCancelled(this.signal);
+      let parsed = page === 0 ? this.firstPages.get(conversationId) : undefined;
+      this.firstPages.delete(conversationId);
+      if (!parsed) {
+        const response = await this.post('/im/chain/single', buildMessageRequest(conversationId, anchor));
+        parsed = parseMessagePage(response);
+      }
       const previousCount = messages.length;
       for (const message of parsed.messages) if (!seen.has(message.id)) {
         seen.add(message.id);
         messages.push(message);
       }
+      onPage?.(page + 1, messages.length);
+      checkCancelled(this.signal);
       if (!parsed.hasMore) return messages.sort((a, b) => BigInt(a.index) < BigInt(b.index) ? -1 : 1);
       if (messages.length === previousCount) throw new Error('豆包消息分页重复或没有有效消息，未写入不完整内容');
       if (!parsed.nextAnchor || BigInt(parsed.nextAnchor) >= BigInt(anchor)) throw new Error('豆包消息分页游标异常');

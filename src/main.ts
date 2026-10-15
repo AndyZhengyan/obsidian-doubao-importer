@@ -1,177 +1,292 @@
-import { Notice, Plugin, PluginSettingTab, Setting, TFile, normalizePath, type App } from 'obsidian';
-import { DoubaoApiClient } from './api';
+import { Notice, Plugin, TFile, normalizePath } from 'obsidian';
+import { DoubaoApiClient, DoubaoAuthError } from './api';
 import { buildDoubaoIndex } from './vault-index';
-import { syncConversations, type SyncPort, type SyncResult } from './sync';
-
-interface Settings {
-  folder: string;
-  intervalMinutes: number;
-  syncOnStart: boolean;
-  checkpoints: Record<string, string>;
-  lastSyncAt: string;
-  lastSummary: string;
-}
-
-const DEFAULT_SETTINGS: Settings = {
-  folder: '豆包/对话',
-  intervalMinutes: 60,
-  syncOnStart: false,
-  checkpoints: {},
-  lastSyncAt: '',
-  lastSummary: '',
-};
+import { emptySyncResult, syncConversations, SyncInterruptedError, type SyncPort, type SyncResult } from './sync';
+import { checkCancelled, isAbortError } from './cancellation';
+import { normalizeSettings } from './settings-data';
+import { retainHistory } from './history';
+import { DoubaoSettingsTab } from './settings-tab';
+import { openSyncHistoryModal } from './ui/sync-history-modal';
+import type { ConnectionState, Settings, SettingsActions, SettingsView, SyncHistoryEntry, TaskState } from './types';
 
 export default class DoubaoSyncPlugin extends Plugin {
-  settings: Settings = { ...DEFAULT_SETTINGS };
+  settings: Settings = normalizeSettings(null);
   private api: DoubaoApiClient | null = null;
-  private syncing = false;
+  private controller: AbortController | null = null;
+  private connectionController: AbortController | null = null;
+  private currentJob: Promise<void> | null = null;
   private interval: number | null = null;
   private statusEl: HTMLElement | null = null;
   private settingsTab: DoubaoSettingsTab | null = null;
+  private connection: ConnectionState = 'unverified';
+  private connectionMessage = '';
+  private task: TaskState = { running: false, phase: 'idle', message: '就绪', processed: 0 };
+  private saveQueue: Promise<void> = Promise.resolve();
+  private unloaded = false;
 
   async onload(): Promise<void> {
-    const saved = await this.loadData() as Partial<Settings> | null;
-    this.settings = { ...DEFAULT_SETTINGS, ...saved, checkpoints: saved?.checkpoints ?? {} };
-    this.settingsTab = new DoubaoSettingsTab(this.app, this);
+    this.settings = normalizeSettings(await this.loadData());
+    const actions: SettingsActions = {
+      login: () => this.openLogin(), logout: () => this.logout(), checkConnection: () => this.checkConnection(),
+      sync: () => this.syncNow(), cancel: () => this.cancelSync(), update: (key, value) => this.updateSetting(key, value),
+      folders: query => this.app.vault.getAllFolders().map(folder => folder.path).filter(path => path.toLowerCase().includes(query.toLowerCase())),
+      showHistory: () => openSyncHistoryModal(this.app, this.settings.syncHistory),
+    };
+    this.settingsTab = new DoubaoSettingsTab(this.app, this, () => this.view(), actions);
     this.addSettingTab(this.settingsTab);
     this.addCommand({ id: 'sync-now', name: '立即同步豆包对话', callback: () => { void this.syncNow(); } });
-    this.addCommand({ id: 'open-login', name: '登录豆包', callback: () => { this.openLogin(); } });
+    this.addCommand({ id: 'open-login', name: '登录豆包', callback: () => this.openLogin() });
+    this.addCommand({ id: 'cancel-sync', name: '取消豆包同步', callback: () => this.cancelSync() });
+    this.addCommand({ id: 'sync-history', name: '查看豆包同步日志', callback: () => actions.showHistory() });
     this.addRibbonIcon('messages-square', '同步豆包对话', () => { void this.syncNow(); });
     this.statusEl = this.addStatusBarItem();
-    this.statusEl.setText('豆包同步：就绪');
+    this.updateView();
     this.resetTimer();
-    if (this.settings.syncOnStart) {
-      this.app.workspace.onLayoutReady(() => { void this.syncNow(); });
-    }
+    this.app.workspace.onLayoutReady(() => {
+      if (this.unloaded) return;
+      if (this.settings.scheduledEnabled && this.settings.syncOnStart) void this.syncNow(true);
+      else void this.checkConnection();
+    });
   }
 
   onunload(): void {
+    this.unloaded = true;
     if (this.interval !== null) window.clearInterval(this.interval);
+    this.controller?.abort();
+    this.connectionController?.abort();
     this.api?.dispose();
+    this.settingsTab?.hide();
+  }
+
+  private view(): SettingsView {
+    return { settings: this.settings, connection: this.connection, connectionMessage: this.connectionMessage, task: this.task };
+  }
+
+  private updateView(): void {
+    if (this.unloaded) return;
+    const label = { unverified: '待验证', checking: '验证中', connected: '已连接', 'signed-out': '未登录', expired: '登录已失效', error: '连接异常' }[this.connection];
+    this.statusEl?.setText(`豆包同步：${this.task.running ? this.task.message : this.task.phase === 'idle' ? label : this.task.message}`);
+    this.settingsTab?.updateRuntimeState();
   }
 
   private client(): DoubaoApiClient {
     return this.api ??= new DoubaoApiClient(() => {
-      this.statusEl?.setText('豆包同步：已连接');
-      if (this.settingsTab?.containerEl.isConnected) this.settingsTab.display();
-      new Notice('豆包登录成功，点击「同步」即可保存对话。');
+      if (this.unloaded) return;
+      this.connection = 'connected';
+      this.connectionMessage = '';
+      this.updateView();
+      new Notice('豆包登录成功，点击「立即同步」即可保存对话。');
     });
   }
 
   openLogin(): void {
-    try {
-      this.client().openLogin();
-      new Notice('请在豆包窗口完成登录；成功后窗口会自动关闭，再点击「同步」。');
-    } catch (error) {
-      new Notice(error instanceof Error ? error.message : String(error));
+    if (this.task.running || this.unloaded) return;
+    this.connectionController?.abort();
+    this.connectionController = null;
+    this.connection = 'unverified';
+    this.connectionMessage = '请在豆包窗口完成登录';
+    this.updateView();
+    try { this.client().openLogin(); } catch (error) {
+      this.connection = 'error';
+      this.connectionMessage = error instanceof Error ? error.message : String(error);
+      this.updateView();
+      new Notice(this.connectionMessage);
     }
   }
 
   async logout(): Promise<void> {
-    await this.client().logout();
-    new Notice('已清除豆包登录状态');
+    this.cancelSync();
+    await this.currentJob;
+    this.connectionController?.abort();
+    this.connectionController = null;
+    try {
+      await this.client().logout();
+      this.connection = 'signed-out';
+      this.connectionMessage = '';
+    } catch (error) {
+      this.connection = 'error';
+      this.connectionMessage = error instanceof Error ? error.message : String(error);
+    }
+    this.updateView();
   }
 
-  async isLoggedIn(): Promise<boolean> {
-    try { return await this.client().isLoggedIn(); } catch { return false; }
+  async checkConnection(): Promise<void> {
+    if (this.task.running || this.connectionController || this.unloaded) return;
+    const controller = new AbortController();
+    this.connectionController = controller;
+    this.connection = 'checking';
+    this.connectionMessage = '';
+    this.updateView();
+    try {
+      const client = this.client();
+      const loggedIn = await client.isLoggedIn();
+      checkCancelled(controller.signal);
+      if (!loggedIn) { this.connection = 'signed-out'; return; }
+      await client.withAuthenticatedPage(page => page.conversations(), controller.signal);
+      checkCancelled(controller.signal);
+      this.connection = 'connected';
+    } catch (error) {
+      if (controller.signal.aborted || isAbortError(error)) return;
+      this.connection = error instanceof DoubaoAuthError ? 'expired' : 'error';
+      this.connectionMessage = error instanceof Error ? error.message : String(error);
+    } finally {
+      if (this.connectionController === controller) this.connectionController = null;
+      this.updateView();
+    }
   }
 
-  async saveSettings(): Promise<void> {
-    await this.saveData(this.settings);
-    this.resetTimer();
+  private persist(): Promise<void> {
+    const snapshot: Settings = JSON.parse(JSON.stringify(this.settings)) as Settings;
+    const operation = this.saveQueue.catch(() => {}).then(() => this.saveData(snapshot));
+    this.saveQueue = operation;
+    return operation;
+  }
+
+  private async updateSetting<K extends 'folder' | 'intervalMinutes' | 'scheduledEnabled' | 'syncOnStart'>(key: K, value: Settings[K]): Promise<void> {
+    if (key === 'intervalMinutes' && (typeof value !== 'number' || !Number.isFinite(value) || value < 5 || value > 1440)) throw new Error('同步周期须为 5–1440 分钟');
+    this.settings[key] = value;
+    if (key !== 'folder') this.resetTimer();
+    this.updateView();
+    await this.persist();
   }
 
   private resetTimer(): void {
     if (this.interval !== null) window.clearInterval(this.interval);
     this.interval = null;
-    if (this.settings.intervalMinutes > 0) {
-      this.interval = window.setInterval(() => { void this.syncNow(true); }, this.settings.intervalMinutes * 60_000);
+    if (!this.unloaded && this.settings.scheduledEnabled) {
+      this.interval = window.setInterval(() => { if (!this.task.running) void this.syncNow(true); }, this.settings.intervalMinutes * 60_000);
     }
   }
 
-  async syncNow(automatic = false): Promise<void> {
-    if (this.syncing) {
+  cancelSync(): void {
+    if (!this.controller || !this.task.running) return;
+    this.task = { ...this.task, message: '正在取消…' };
+    this.updateView();
+    this.controller.abort();
+  }
+
+  syncNow(automatic = false): Promise<void> {
+    if (this.unloaded) return Promise.resolve();
+    if (this.currentJob) {
       if (!automatic) new Notice('豆包同步正在进行');
-      return;
+      return this.currentJob;
     }
-    this.syncing = true;
-    this.statusEl?.setText('豆包同步：准备中');
-    try {
-      const api = this.client();
-      if (!await api.isLoggedIn()) {
-        if (!automatic) this.openLogin();
-        else this.statusEl?.setText('豆包同步：请登录');
-        return;
-      }
-      const folder = this.validateFolder();
-      const index = await this.buildUidIndex();
-      const result = await api.withAuthenticatedPage(page => {
-        const port: SyncPort = {
-          list: () => page.conversations(),
-          messages: id => page.messages(id),
-          find: async id => {
-            const paths = index.get(id) ?? [];
-            if (paths.length > 1) throw new Error('发现多个相同 uid 的笔记，已跳过');
-            return paths[0] ?? null;
-          },
-          read: async path => {
-            const file = this.app.vault.getAbstractFileByPath(path);
-            if (!(file instanceof TFile)) throw new Error('原笔记不存在');
-            return this.app.vault.read(file);
-          },
-          create: async (path, content) => {
-            if (this.app.vault.getAbstractFileByPath(path)) throw new Error('目标路径已存在其他文件');
-            await this.ensureFolder(path.slice(0, path.lastIndexOf('/')));
-            await this.app.vault.create(path, content);
-            const id = /^uid: "([^"]+)"/m.exec(content)?.[1];
-            if (id) index.set(id, [path]);
-          },
-          update: async (path, content) => {
-            const file = this.app.vault.getAbstractFileByPath(path);
-            if (!(file instanceof TFile)) throw new Error('原笔记不存在');
-            await this.app.vault.modify(file, content);
-          },
-        };
-        return syncConversations(port, this.settings.checkpoints, folder, (done, total) => {
-          this.statusEl?.setText(`豆包同步：${done}/${total}`);
-        });
-      });
-      await this.finishSync(result);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      this.statusEl?.setText('豆包同步：失败');
-      if (!automatic) new Notice(`豆包同步失败：${message}`, 8000);
-      console.error('[Doubao Sync] Sync failed:', message);
-    } finally {
-      this.syncing = false;
-    }
+    this.connectionController?.abort();
+    this.connectionController = null;
+    this.currentJob = this.runSync(automatic).finally(() => { this.currentJob = null; });
+    return this.currentJob;
   }
 
-  private async finishSync(result: SyncResult): Promise<void> {
-    this.settings.checkpoints = result.checkpoints;
-    this.settings.lastSyncAt = new Date().toISOString();
-    this.settings.lastSummary = `新增 ${result.created} · 更新 ${result.updated} · 跳过 ${result.skipped} · 失败 ${result.failed}`;
-    await this.saveData(this.settings);
-    const suffix = result.limited ? '；会话列表达到 200 条上限，可能尚未覆盖更早历史' : '';
-    const summary = `${this.settings.lastSummary}${suffix}`;
-    this.statusEl?.setText(`豆包同步：${result.failed ? '部分完成' : '完成'}`);
-    new Notice(`豆包同步${result.failed ? '部分完成' : '完成'}：${summary}`, 8000);
-    if (result.errors.length) {
-      console.warn('[Doubao Sync] Failed conversation IDs:', result.errors.map(error => `${error.id}: ${error.message}`));
+  private applyResult(entry: SyncHistoryEntry, result: SyncResult, status: SyncHistoryEntry['status']): void {
+    this.settings.checkpoints = { ...result.checkpoints };
+    this.settings.messageVersions = { ...result.versions };
+    Object.assign(entry, {
+      status, created: result.created, updated: result.updated, skipped: result.skipped, failed: result.failed,
+      total: result.total, items: result.items.map(item => ({ ...item })), limited: result.limited,
+      durationMs: Date.now() - entry.startedAt,
+    });
+  }
+
+  private async runSync(automatic: boolean): Promise<void> {
+    const controller = new AbortController();
+    this.controller = controller;
+    this.task = { running: true, phase: 'listing', message: '获取会话列表…', processed: 0 };
+    this.updateView();
+    const startedAt = Date.now();
+    const entry: SyncHistoryEntry = { id: crypto.randomUUID(), startedAt, finishedAt: 0, durationMs: 0, source: automatic ? 'auto' : 'manual', status: 'running', created: 0, updated: 0, skipped: 0, failed: 0, total: 0, items: [], limited: false };
+    this.settings.syncHistory = retainHistory([...this.settings.syncHistory, entry]);
+    let result = emptySyncResult(this.settings.checkpoints, this.settings.messageVersions);
+    try {
+      await this.persist();
+      const folder = this.validateFolder();
+      const api = this.client();
+      const loggedIn = await api.isLoggedIn();
+      checkCancelled(controller.signal);
+      if (!loggedIn) { this.connection = 'signed-out'; throw new DoubaoAuthError(); }
+      const index = await this.buildUidIndex();
+      checkCancelled(controller.signal);
+      result = await api.withAuthenticatedPage(page => {
+        const port = this.vaultPort(index, controller.signal);
+        return syncConversations({ ...port, list: async () => {
+          const conversations = await page.conversations();
+          this.connection = 'connected';
+          this.connectionMessage = '';
+          this.updateView();
+          return conversations;
+        }, messages: (id, onPage) => page.messages(id, onPage), version: id => page.version(id) },
+          this.settings.checkpoints, folder, (processed, total) => {
+            this.task = { ...this.task, processed, total };
+            this.updateView();
+          }, {
+            signal: controller.signal, previousVersions: this.settings.messageVersions,
+            onConversation: conversation => {
+              this.task = { ...this.task, phase: 'reading', message: '读取会话消息…', currentTitle: conversation.title || '无标题对话', page: undefined, messageCount: undefined };
+              this.updateView();
+            },
+            onPage: (page, messageCount) => { this.task = { ...this.task, page, messageCount }; this.updateView(); },
+            onWrite: () => { this.task = { ...this.task, phase: 'writing', message: '保存笔记…' }; this.updateView(); },
+            onItem: async completed => { result = completed; this.applyResult(entry, completed, 'running'); await this.persist(); },
+          });
+      }, controller.signal);
+    } catch (error) {
+      if (error instanceof SyncInterruptedError) {
+        result = error.result;
+        if (error.reason === 'auth') this.connection = 'expired';
+        else if (this.task.phase === 'listing') this.connection = 'error';
+      } else if (error instanceof DoubaoAuthError) {
+        if (this.connection !== 'signed-out') this.connection = 'expired';
+        result.status = 'failed';
+      } else result.status = controller.signal.aborted || isAbortError(error) ? 'cancelled' : 'failed';
+      if (result.status !== 'cancelled') entry.error = error instanceof Error ? error.message : String(error);
     }
+    this.applyResult(entry, result, result.status);
+    entry.finishedAt = Date.now();
+    this.settings.syncHistory = retainHistory(this.settings.syncHistory);
+    this.settings.lastSyncAt = new Date(entry.finishedAt).toISOString();
+    this.settings.lastSummary = `新增 ${result.created} · 更新 ${result.updated} · 跳过 ${result.skipped} · 失败 ${result.failed}`;
+    const message = { success: '同步完成', partial: '部分完成', failed: '同步失败', cancelled: '已取消' }[result.status];
+    this.task = { ...this.task, running: false, phase: result.status, message };
+    this.controller = null;
+    try { await this.persist(); } catch (error) {
+      this.task = { ...this.task, phase: 'failed', message: '同步记录保存失败' };
+      if (!this.unloaded) new Notice(`同步记录保存失败：${error instanceof Error ? error.message : String(error)}`, 8000);
+    }
+    this.updateView();
+    if (!automatic && !this.unloaded) new Notice(`${message}：${this.settings.lastSummary}${entry.error ? `；${entry.error}` : ''}${result.limited ? '；列表达到 200 条上限，请查看日志' : ''}`, 8000);
+  }
+
+  private vaultPort(index: Map<string, string[]>, signal: AbortSignal): Omit<SyncPort, 'list' | 'messages'> {
+    const fileAt = (path: string): TFile => {
+      const file = this.app.vault.getAbstractFileByPath(path);
+      if (!(file instanceof TFile)) throw new Error('原笔记不存在');
+      return file;
+    };
+    return {
+      find: async id => { const paths = index.get(id) ?? []; if (paths.length > 1) throw new Error('发现多个相同 uid 的笔记，已跳过'); return paths[0] ?? null; },
+      read: path => this.app.vault.read(fileAt(path)),
+      create: async (path, content) => {
+        checkCancelled(signal);
+        if (this.app.vault.getAbstractFileByPath(path)) throw new Error('目标路径已存在其他文件');
+        await this.ensureFolder(path.slice(0, path.lastIndexOf('/')), signal);
+        checkCancelled(signal);
+        await this.app.vault.create(path, content);
+        const id = /^uid: "([^"]+)"/m.exec(content)?.[1];
+        if (id) index.set(id, [path]);
+      },
+      update: async (path, content) => { checkCancelled(signal); await this.app.vault.modify(fileAt(path), content); },
+    };
   }
 
   private validateFolder(): string {
     const folder = this.settings.folder.trim().replace(/^\/+|\/+$/g, '');
-    if (!folder || folder.split('/').some(segment => segment === '.' || segment === '..' || !segment) || folder.startsWith('.obsidian')) {
-      throw new Error('同步目录无效');
-    }
+    if (!folder || folder.split('/').some(segment => segment === '.' || segment === '..' || !segment || segment === this.app.vault.configDir)) throw new Error('同步目录无效');
     return normalizePath(folder);
   }
 
-  private async ensureFolder(folder: string): Promise<void> {
+  private async ensureFolder(folder: string, signal: AbortSignal): Promise<void> {
     const parts = folder.split('/');
     for (let length = 1; length <= parts.length; length++) {
+      checkCancelled(signal);
       const path = parts.slice(0, length).join('/');
       if (!this.app.vault.getAbstractFileByPath(path)) await this.app.vault.createFolder(path);
     }
@@ -180,48 +295,6 @@ export default class DoubaoSyncPlugin extends Plugin {
   private async buildUidIndex(): Promise<Map<string, string[]>> {
     const files = this.app.vault.getMarkdownFiles();
     const byPath = new Map(files.map(file => [file.path, file]));
-    return buildDoubaoIndex(files.map(file => ({ path: file.path, frontmatter: this.app.metadataCache.getFileCache(file)?.frontmatter })),
-      path => this.app.vault.cachedRead(byPath.get(path)!));
-  }
-}
-
-class DoubaoSettingsTab extends PluginSettingTab {
-  constructor(app: App, private readonly plugin: DoubaoSyncPlugin) { super(app, plugin); }
-
-  display(): void {
-    const { containerEl } = this;
-    containerEl.empty();
-    containerEl.addClass('doubao-settings');
-    containerEl.createEl('h2', { text: '豆包同步' });
-    containerEl.createEl('p', { text: '将自己的豆包对话保存为本地 Markdown。首次使用请先登录。', cls: 'doubao-settings-desc' });
-    const status = containerEl.createDiv({ cls: 'doubao-settings-status-bar' });
-    status.createSpan({ text: '登录状态：检查中…' });
-    void this.plugin.isLoggedIn().then(loggedIn => {
-      status.empty();
-      status.createSpan({ text: loggedIn ? '登录状态：已连接' : '登录状态：未登录' });
-    });
-    new Setting(containerEl).setName('豆包账号').setDesc('登录窗口使用独立的本地浏览器会话；插件不会保存 Cookie 明文。')
-      .addButton(button => button.setButtonText('登录豆包').onClick(() => this.plugin.openLogin()))
-      .addButton(button => button.setButtonText('退出登录').onClick(async () => { await this.plugin.logout(); this.display(); }));
-    new Setting(containerEl).setName('立即同步').setDesc('从豆包读取最近的对话，按会话生成或更新笔记。')
-      .addButton(button => button.setButtonText('同步').setCta().onClick(() => { void this.plugin.syncNow(); }));
-    new Setting(containerEl).setName('同步目录').setDesc('默认：豆包/对话')
-      .addText(text => text.setPlaceholder('豆包/对话').setValue(this.plugin.settings.folder).onChange(async value => {
-        this.plugin.settings.folder = value;
-        await this.plugin.saveSettings();
-      }));
-    new Setting(containerEl).setName('定时同步').setDesc('Obsidian 桌面端运行时执行；0 表示关闭。')
-      .addDropdown(dropdown => dropdown
-        .addOption('0', '关闭').addOption('30', '每 30 分钟').addOption('60', '每小时').addOption('120', '每 2 小时')
-        .setValue(String(this.plugin.settings.intervalMinutes))
-        .onChange(async value => { this.plugin.settings.intervalMinutes = Number(value); await this.plugin.saveSettings(); }));
-    new Setting(containerEl).setName('启动时同步').setDesc('打开 Obsidian 后自动运行一次。')
-      .addToggle(toggle => toggle.setValue(this.plugin.settings.syncOnStart).onChange(async value => {
-        this.plugin.settings.syncOnStart = value;
-        await this.plugin.saveSettings();
-      }));
-    if (this.plugin.settings.lastSyncAt) {
-      containerEl.createEl('p', { text: `上次同步：${new Date(this.plugin.settings.lastSyncAt).toLocaleString()} · ${this.plugin.settings.lastSummary}`, cls: 'doubao-settings-desc' });
-    }
+    return buildDoubaoIndex(files.map(file => ({ path: file.path, frontmatter: this.app.metadataCache.getFileCache(file)?.frontmatter })), path => this.app.vault.cachedRead(byPath.get(path)!));
   }
 }
