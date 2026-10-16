@@ -8,7 +8,8 @@ import { openSyncHistoryModal } from '../src/ui/sync-history-modal';
 
 // Obsidian ships runtime DOM containers inside the host app, not its npm types.
 vi.mock('obsidian', () => ({
-  PluginSettingTab: class { containerEl = document.createElement('div'); },
+  PluginSettingTab: class { containerEl = document.createElement('div'); constructor(public app: unknown) {} },
+  AbstractInputSuggest: class { close() {} },
   Modal: class {
     contentEl = document.createElement('div');
     onOpen() {}
@@ -48,34 +49,94 @@ function button(root: HTMLElement, text: string): HTMLButtonElement {
 it('refreshes progress without losing input, focus, caret, disclosure or scroll', async () => {
   const { tab, view } = setup();
   const root = tab.containerEl;
-  const folder = root.querySelector('input[aria-label="同步目录"]') as HTMLInputElement;
+  const folder = root.querySelector('input[aria-label="目标文件夹"]') as HTMLInputElement;
   expect(folder).not.toBeNull();
   await act(() => { folder.value = '尚未保存的新目录'; folder.dispatchEvent(new Event('input', { bubbles: true })); });
-  act(() => button(root, '展开自动同步设置').click());
+  act(() => (root.querySelector('[data-schedule-disclosure]') as HTMLButtonElement).click());
   folder.focus(); folder.setSelectionRange(2, 5); root.scrollTop = 320;
   view.task = { running: true, phase: 'reading', message: '正在读取', processed: 2, total: 49,
     currentTitle: '长对话', page: 314, messageCount: 15704 };
   act(() => { tab.updateRuntimeState(); tab.display(); });
-  expect(root.querySelector('input[aria-label="同步目录"]')).toBe(folder);
+  expect(root.querySelector('input[aria-label="目标文件夹"]')).toBe(folder);
   expect(folder.value).toBe('尚未保存的新目录');
   expect(document.activeElement).toBe(folder);
   expect(folder.selectionStart).toBe(2);
   expect(root.scrollTop).toBe(320);
-  expect(button(root, '收起自动同步设置').getAttribute('aria-expanded')).toBe('true');
+  expect(root.querySelector('[data-schedule-disclosure]')?.getAttribute('aria-expanded')).toBe('true');
   expect(root.textContent).toContain('第 314 页');
   expect(root.textContent).toContain('15704 条消息');
   expect(root.textContent).toContain('2 / 49');
   expect(root.querySelector('[role="status"]')?.textContent).toBeTruthy();
+  expect(root.querySelector('[role="progressbar"]')?.getAttribute('aria-valuenow')).toBe('4');
+});
+
+it('keeps credentials collapsed after connection and exposes them through the status bar', () => {
+  const { tab, view } = setup();
+  const panel = tab.containerEl.querySelector('[data-credential-details]') as HTMLElement;
+  expect(panel).not.toBeNull();
+  expect(panel.hidden).toBe(true);
+  act(() => button(tab.containerEl, '更改凭证').click());
+  expect(panel.hidden).toBe(false);
+  view.connection = 'expired';
+  act(() => tab.updateRuntimeState());
+  expect(panel.hidden).toBe(false);
+  expect(button(tab.containerEl, '同步对话').disabled).toBe(true);
+  expect(tab.containerEl.textContent).toContain('重新登录');
+});
+
+it('preserves collapsed sync and advanced sections while task state refreshes', () => {
+  const { tab, view } = setup();
+  const sync = tab.containerEl.querySelector('[data-sync-disclosure]') as HTMLButtonElement;
+  const advanced = tab.containerEl.querySelector('[data-advanced-disclosure]') as HTMLButtonElement;
+  expect(sync?.getAttribute('aria-expanded')).toBe('true');
+  expect(advanced?.getAttribute('aria-expanded')).toBe('false');
+  act(() => { sync.click(); advanced.click(); });
+  view.task = { running: true, phase: 'listing', message: '获取会话列表…', processed: 0 };
+  act(() => tab.updateRuntimeState());
+  expect(sync.getAttribute('aria-expanded')).toBe('false');
+  expect(advanced.getAttribute('aria-expanded')).toBe('true');
+  expect(tab.containerEl.querySelector('[data-sync-settings]')?.hasAttribute('hidden')).toBe(true);
+  const progress = tab.containerEl.querySelector('[role="progressbar"]');
+  expect(progress).not.toBeNull();
+  expect(progress?.hasAttribute('aria-valuenow')).toBe(false);
+});
+
+it('edits any valid minute interval without replacing it with a fixed choice', async () => {
+  const { tab, view } = setup();
+  view.settings.intervalMinutes = 45;
+  act(() => tab.updateRuntimeState());
+  const toggle = tab.containerEl.querySelector('[aria-controls][data-schedule-disclosure]') as HTMLButtonElement;
+  expect(toggle).not.toBeNull();
+  act(() => toggle.click());
+  const period = tab.containerEl.querySelector('input[type="number"]') as HTMLInputElement;
+  expect(period?.value).toBe('45');
+  await act(async () => { period.value = '15'; period.dispatchEvent(new Event('input', { bubbles: true })); });
+  expect(view.settings.intervalMinutes).toBe(15);
+  await act(async () => { period.value = ''; period.dispatchEvent(new Event('input', { bubbles: true })); });
+  expect(view.settings.intervalMinutes).toBe(15);
+  expect(period.getAttribute('aria-invalid')).toBe('true');
+});
+
+it('allows reopening a dismissed login window instead of leaving login permanently disabled', () => {
+  const { tab, view, actions } = setup('unverified');
+  let reopened = false;
+  actions.login = () => { reopened = true; };
+  view.connectionMessage = '请在豆包窗口完成登录';
+  act(() => tab.updateRuntimeState());
+  const login = button(tab.containerEl, '继续网页登录');
+  expect(login.disabled).toBe(false);
+  act(() => login.click());
+  expect(reopened).toBe(true);
 });
 
 it('prevents repeated sync while running, exposes cancel and renders the cancelled result', async () => {
   const context = setup();
-  await act(async () => { button(context.tab.containerEl, '立即同步').click(); });
+  await act(async () => { button(context.tab.containerEl, '同步对话').click(); });
   expect(context.syncs()).toBe(1);
   context.view.task = { running: true, phase: 'reading', message: '正在读取', processed: 1 };
   act(() => context.tab.updateRuntimeState());
-  expect(button(context.tab.containerEl, '立即同步').disabled).toBe(true);
-  expect(button(context.tab.containerEl, '登录豆包').disabled).toBe(true);
+  expect(button(context.tab.containerEl, '同步对话').disabled).toBe(true);
+  expect(button(context.tab.containerEl, '网页登录').disabled).toBe(true);
   expect(button(context.tab.containerEl, '测试连接').disabled).toBe(true);
   act(() => button(context.tab.containerEl, '取消同步').click());
   expect(context.cancelled()).toBe(true);
@@ -83,8 +144,8 @@ it('prevents repeated sync while running, exposes cancel and renders the cancell
   act(() => context.tab.updateRuntimeState());
   expect(context.tab.containerEl.textContent).toContain('已取消，已完成的对话已保留');
   expect(Array.from(context.tab.containerEl.querySelectorAll('button')).some(el => el.textContent === '取消同步')).toBe(false);
-  expect(button(context.tab.containerEl, '立即同步').disabled).toBe(false);
-  expect(button(context.tab.containerEl, '登录豆包').disabled).toBe(false);
+  expect(button(context.tab.containerEl, '同步对话').disabled).toBe(false);
+  expect(button(context.tab.containerEl, '网页登录').disabled).toBe(false);
   expect(button(context.tab.containerEl, '测试连接').disabled).toBe(false);
 });
 
@@ -92,13 +153,13 @@ it('treats connection errors separately from signed-out and allows manual-only u
   const { tab, view } = setup('error');
   view.connectionMessage = '网络暂不可用';
   act(() => tab.updateRuntimeState());
-  expect(tab.containerEl.textContent).toContain('连接检查失败');
+  expect(tab.containerEl.textContent).toContain('连接异常');
   expect(tab.containerEl.textContent).toContain('网络暂不可用');
-  expect(button(tab.containerEl, '立即同步').disabled).toBe(false);
+  expect(button(tab.containerEl, '同步对话').disabled).toBe(false);
   expect(tab.containerEl.textContent).toContain('仅手动同步');
   view.connection = 'signed-out';
   act(() => tab.updateRuntimeState());
-  expect(button(tab.containerEl, '立即同步').disabled).toBe(true);
+  expect(button(tab.containerEl, '同步对话').disabled).toBe(true);
 });
 
 it('unmounts settings on hide and mounts a clean view when reopened', () => {
@@ -120,7 +181,7 @@ it('guards rapid sync clicks before the next runtime render', async () => {
   const pending = actions.sync;
   actions.sync = async () => { requests++; await pending(); };
   act(() => {
-    const sync = button(tab.containerEl, '立即同步');
+    const sync = button(tab.containerEl, '同步对话');
     sync.click(); sync.click();
   });
   expect(requests).toBe(1);
@@ -130,19 +191,17 @@ it('guards rapid sync clicks before the next runtime render', async () => {
 
 it('changes automatic settings and shows their summary without requiring automatic sync for readiness', async () => {
   const { tab, view } = setup();
-  const automatic = tab.containerEl.querySelector('input[aria-label="自动同步"]') as HTMLInputElement;
+  const automatic = tab.containerEl.querySelector('input[aria-label="启用自动同步"]') as HTMLInputElement;
   await act(async () => automatic.click());
   act(() => tab.updateRuntimeState());
   expect(view.settings.scheduledEnabled).toBe(true);
   expect(tab.containerEl.textContent).toContain('每 60 分钟');
-  act(() => button(tab.containerEl, '展开自动同步设置').click());
-  const period = tab.containerEl.querySelector('select[aria-label="同步周期"]') as HTMLSelectElement;
-  await act(async () => { period.value = '120'; period.dispatchEvent(new Event('change', { bubbles: true })); });
+  act(() => (tab.containerEl.querySelector('[data-schedule-disclosure]') as HTMLButtonElement).click());
+  const period = tab.containerEl.querySelector('input[aria-label="同步间隔（分钟）"]') as HTMLInputElement;
+  await act(async () => { period.value = '120'; period.dispatchEvent(new Event('input', { bubbles: true })); });
   act(() => tab.updateRuntimeState());
   expect(view.settings.intervalMinutes).toBe(120);
   expect(tab.containerEl.textContent).toContain('每 120 分钟');
-  const folders = Array.from(tab.containerEl.querySelectorAll('datalist option')).map(option => option.getAttribute('value'));
-  expect(folders).toContain('已有目录');
 });
 
 it('shows real history counts, no-change results and each failed conversation without message bodies', () => {

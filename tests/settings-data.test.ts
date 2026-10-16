@@ -12,3 +12,8 @@ it('bounds invalid settings and never treats an empty object as verified connect
   expect(normalizeSettings({ intervalMinutes: -4, checkpoints: null, syncHistory: 'bad' })).toMatchObject({ intervalMinutes: 60, checkpoints: {}, syncHistory: [] });
   expect(normalizeSettings(null).folder).toBe('豆包/对话');
 });
+
+it('starts fresh installs in manual mode without changing existing automatic schedules', () => {
+  expect(normalizeSettings(null)).toMatchObject({ scheduledEnabled: false, intervalMinutes: 30, syncOnStart: true });
+  expect(normalizeSettings({ intervalMinutes: 45, syncOnStart: false })).toMatchObject({ scheduledEnabled: true, intervalMinutes: 45, syncOnStart: false });
+});

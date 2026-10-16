@@ -19,6 +19,6 @@ export class DoubaoSettingsTab extends PluginSettingTab {
     this.mounted = false;
   }
   updateRuntimeState(): void {
-    if (this.mounted) render(<SettingsComponent view={this.getView()} actions={this.actions} />, this.containerEl);
+    if (this.mounted) render(<SettingsComponent app={this.app} view={this.getView()} actions={this.actions} />, this.containerEl);
   }
 }

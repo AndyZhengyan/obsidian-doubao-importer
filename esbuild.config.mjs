@@ -12,3 +12,9 @@ await esbuild.build({
   format: 'cjs',
   external: ['obsidian', 'electron', '@electron/remote', 'crypto'],
 });
+await esbuild.build({
+  entryPoints: ['src/styles.css'],
+  bundle: true,
+  outfile: 'styles.css',
+  minify: false,
+});

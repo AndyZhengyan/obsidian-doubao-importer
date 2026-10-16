@@ -10,11 +10,15 @@ const state = vi.hoisted(() => ({
   list: [] as Array<{ id: string; title: string; created: string; modified: string }>,
   stallId: '', calls: 0, authId: '', version: 'v1', loggedIn: true, listFails: false,
   view: null as null | (() => SettingsView), actions: null as SettingsActions | null,
+  notices: [] as Array<{ message: string; timeout?: number }>,
 }));
 
 vi.mock('obsidian', () => ({
   TFile: class { constructor(public path: string) {} },
-  Notice: class {},
+  Notice: class {
+    messageEl = { addClass() {} };
+    constructor(message: string, timeout?: number) { state.notices.push({ message, timeout }); }
+  },
   normalizePath: (path: string) => path,
   Plugin: class {
     constructor(public app: unknown) {}
@@ -62,6 +66,7 @@ const conversation = { id: '123', title: '第一会话', created: '1700000000', 
 beforeEach(async () => {
   state.data = { intervalMinutes: 0, folder: '豆包/对话' };
   state.saves = []; state.list = [conversation]; state.stallId = ''; state.calls = 0; state.authId = ''; state.version = 'v1'; state.loggedIn = true; state.listFails = false;
+  state.notices = [];
   files = new Map();
   const folders = new Set<string>();
   const app = {
@@ -107,6 +112,7 @@ it('cancels an in-flight conversation and keeps already committed results on dis
   state.actions!.cancel();
   await task;
   expect(state.view!().task).toMatchObject({ running: false, phase: 'cancelled' });
+  expect(state.notices.at(-1)?.message).toContain('已保留完成的笔记');
   expect(files.size).toBe(1);
   expect(state.saves.at(-1)).toMatchObject({
     checkpoints: { '123': '1700000100' },
@@ -155,4 +161,58 @@ it('records automatic timer runs and stops scheduling when the user disables aut
   await state.actions!.update('scheduledEnabled', false);
   await vi.advanceTimersByTimeAsync(60 * 60_000);
   expect(plugin.settings.syncHistory).toHaveLength(count);
+});
+
+it('notifies automatic changes but stays quiet when nothing changed', async () => {
+  await plugin.syncNow(true);
+  expect(state.notices.at(-1)?.message).toContain('新增 1');
+  const count = state.notices.length;
+  await plugin.syncNow(true);
+  expect(state.notices).toHaveLength(count);
+});
+
+it('reports automatic auth failures with recovery advice and suppresses the same unresolved failure', async () => {
+  state.loggedIn = false;
+  await plugin.syncNow(true);
+  expect(state.notices.at(-1)?.message).toContain('重新登录');
+  expect(state.notices.at(-1)?.message).toContain('豆包登录已失效，请重新登录');
+  const count = state.notices.length;
+  await plugin.syncNow(true);
+  expect(state.notices).toHaveLength(count);
+  state.loggedIn = true;
+  await plugin.syncNow(true);
+  state.loggedIn = false;
+  await plugin.syncNow(true);
+  expect(state.notices.at(-1)?.message).toContain('重新登录');
+  expect(state.notices.length).toBe(count + 2);
+});
+
+it('preserves the original automatic network error and gives an actionable retry suggestion', async () => {
+  state.listFails = true;
+  await plugin.syncNow(true);
+  expect(state.notices.at(-1)?.message).toContain('网络断开');
+  expect(state.notices.at(-1)?.message).toContain('检查网络');
+  expect(state.notices.at(-1)?.message).toContain('同步日志');
+});
+
+it('warns when an automatic result reaches the list limit and does not repeat an unresolved limit warning', async () => {
+  state.list = Array.from({ length: 200 }, (_, index) => ({ ...conversation, id: String(index) }));
+  await plugin.syncNow(true);
+  expect(state.notices.at(-1)?.message).toContain('200 条上限');
+  expect(state.notices.at(-1)?.message).toContain('可能不完整');
+  const count = state.notices.length;
+  await plugin.syncNow(true);
+  expect(state.notices).toHaveLength(count);
+});
+
+it('reports a new automatic failure after a manual sync has recovered the connection', async () => {
+  state.listFails = true;
+  await plugin.syncNow(true);
+  state.listFails = false;
+  await plugin.syncNow();
+  const count = state.notices.length;
+  state.listFails = true;
+  await plugin.syncNow(true);
+  expect(state.notices).toHaveLength(count + 1);
+  expect(state.notices.at(-1)?.message).toContain('网络断开');
 });

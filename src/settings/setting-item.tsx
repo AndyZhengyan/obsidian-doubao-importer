@@ -9,11 +9,11 @@ interface SettingItemProps {
 }
 
 export function SettingItem({ name, description, children }: SettingItemProps) {
-  return <div className="doubao-setting-item">
-    <div className="doubao-setting-info">
-      <div className="doubao-setting-name">{name}</div>
-      {description && <div className="doubao-setting-description">{description}</div>}
+  return <div className="setting-item doubao-setting-item">
+    <div className="setting-item-info doubao-setting-info">
+      <div className="setting-item-name doubao-setting-name">{name}</div>
+      {description && <div className="setting-item-description doubao-setting-description">{description}</div>}
     </div>
-    <div className="doubao-setting-control">{children}</div>
+    <div className="setting-item-control doubao-setting-control">{children}</div>
   </div>;
 }
