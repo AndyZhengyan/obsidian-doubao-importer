@@ -30,7 +30,7 @@ export default class DoubaoSyncPlugin extends Plugin {
   async onload(): Promise<void> {
     this.settings = normalizeSettings(await this.loadData());
     const actions: SettingsActions = {
-      login: () => this.openLogin(), logout: () => this.logout(), checkConnection: () => this.checkConnection(),
+      login: () => this.openLogin(), logout: () => this.logout(), checkConnection: () => this.checkConnection(true),
       sync: () => this.syncNow(), cancel: () => this.cancelSync(), update: (key, value) => this.updateSetting(key, value),
       folders: query => this.app.vault.getAllFolders().map(folder => folder.path).filter(path => path.toLowerCase().includes(query.toLowerCase())),
       showHistory: () => openSyncHistoryModal(this.app, this.settings.syncHistory),
@@ -113,7 +113,7 @@ export default class DoubaoSyncPlugin extends Plugin {
     this.updateView();
   }
 
-  async checkConnection(): Promise<void> {
+  async checkConnection(manual = false): Promise<void> {
     if (this.task.running || this.connectionController || this.unloaded) return;
     const controller = new AbortController();
     this.connectionController = controller;
@@ -128,6 +128,7 @@ export default class DoubaoSyncPlugin extends Plugin {
       await client.withAuthenticatedPage(page => page.conversations(), controller.signal);
       checkCancelled(controller.signal);
       this.connection = 'connected';
+      if (manual) this.connectionMessage = '连接成功';
     } catch (error) {
       if (controller.signal.aborted || isAbortError(error)) return;
       this.connection = error instanceof DoubaoAuthError ? 'expired' : 'error';

@@ -2,7 +2,7 @@
 import { useEffect, useId, useRef, useState } from 'preact/hooks';
 import type { App } from 'obsidian';
 import type { SettingsActions, SettingsView } from '../types';
-import { CONNECTION_LABELS, PHASE_LABELS } from '../ui/text';
+import { CONNECTION_LABELS, formatLastSync, PHASE_LABELS } from '../ui/text';
 import { SettingItem } from './setting-item';
 import { Toggle } from './toggle';
 import { ExternalLink } from './external-link';
@@ -47,7 +47,7 @@ export function SettingsComponent({ app, view, actions }: { app: App; view: Sett
     void perform(() => actions.update(key, value));
   };
   const timestamp = new Date(settings.lastSyncAt);
-  const lastSync = settings.lastSyncAt && !Number.isNaN(timestamp.getTime()) ? timestamp.toLocaleString() : '暂未同步';
+  const lastSync = formatLastSync(timestamp.getTime());
   const scheduledSummary = settings.scheduledEnabled
     ? `每 ${settings.intervalMinutes} 分钟 · ${settings.syncOnStart ? '启动时' : '不在启动时同步'} · 仅下载`
     : '未启用 · 仅手动同步';
@@ -72,7 +72,9 @@ export function SettingsComponent({ app, view, actions }: { app: App; view: Sett
         <strong>豆包网页登录</strong>
         <span className={`doubao-connection-health doubao-connection-health--${connection}`} role="status"><span className="doubao-connection-health-dot" aria-hidden="true" />{CONNECTION_LABELS[connection]}</span>
         <span>当前状态: {task.running ? '同步中' : PHASE_LABELS[task.phase]}</span>
-        <span>上次同步: {lastSync}</span>
+        <span>上次同步: {Number.isFinite(timestamp.getTime())
+          ? <time dateTime={timestamp.toISOString()} title={timestamp.toLocaleString()}>{lastSync}</time>
+          : lastSync}</span>
       </div>
       <div className="doubao-settings-status-actions">
         <button type="button" className="mod-secondary" disabled={task.running || testing || connection === 'signed-out'} onClick={() => {
@@ -81,7 +83,7 @@ export function SettingsComponent({ app, view, actions }: { app: App; view: Sett
         <button type="button" className="mod-secondary" data-change-credentials aria-expanded={credentialsOpen} aria-controls={credentialId}
           onClick={() => setCredentialsOpen(open => !open)}>{credentialsOpen ? '收起凭证' : '更改凭证'}</button>
       </div>
-      {view.connectionMessage && <span className={connection === 'error' || connection === 'expired' ? 'doubao-connection-error' : 'doubao-credentials-message'}
+      {view.connectionMessage && <span className={connection === 'error' || connection === 'expired' ? 'doubao-connection-error' : connection === 'connected' ? 'doubao-connection-success' : 'doubao-credentials-message'}
         role={connection === 'error' || connection === 'expired' ? 'alert' : 'status'}>{view.connectionMessage}</span>}
     </div>
 

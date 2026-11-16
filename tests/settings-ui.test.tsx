@@ -6,10 +6,15 @@ import type { SettingsActions, SettingsView, SyncHistoryEntry } from '../src/typ
 import { DoubaoSettingsTab } from '../src/settings-tab';
 import { openSyncHistoryModal } from '../src/ui/sync-history-modal';
 
+const suggestHost = vi.hoisted(() => ({ instances: [] as unknown[] }));
+
 // Obsidian ships runtime DOM containers inside the host app, not its npm types.
 vi.mock('obsidian', () => ({
   PluginSettingTab: class { containerEl = document.createElement('div'); constructor(public app: unknown) {} },
-  AbstractInputSuggest: class { close() {} },
+  AbstractInputSuggest: class {
+    constructor() { suggestHost.instances.push(this); }
+    close() {}
+  },
   Modal: class {
     contentEl = document.createElement('div');
     onOpen() {}
@@ -40,11 +45,38 @@ function setup(connection: SettingsView['connection'] = 'connected') {
   return { view, actions, tab, cancelled: () => cancelled, syncs: () => syncs };
 }
 
+it('shows an elapsed last-sync time while retaining the exact time on hover', () => {
+  const { view, tab } = setup();
+  vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-11-16T10:00:00Z'));
+  try {
+    expect(tab.containerEl.textContent).toContain('暂未同步');
+    view.settings.lastSyncAt = '2026-11-16T09:55:00Z';
+    act(() => tab.updateRuntimeState());
+    const time = tab.containerEl.querySelector('time');
+    expect(time?.textContent).toBe('5分钟前');
+    expect(Date.parse(time?.getAttribute('datetime') ?? '')).toBe(Date.parse(view.settings.lastSyncAt));
+    expect(time?.title).toBe(new Date(view.settings.lastSyncAt).toLocaleString());
+  } finally {
+    vi.restoreAllMocks();
+  }
+});
+
 function button(root: HTMLElement, text: string): HTMLButtonElement {
   const found = Array.from(root.querySelectorAll('button')).find(el => el.textContent === text);
   expect(found, `button ${text}`).toBeDefined();
   return found!;
 }
+
+it('passes folder queries to the suggestion provider and saves the chosen path', async () => {
+  const { actions, tab, view } = setup();
+  actions.folders = query => ['raw/articles', 'raw/transcripts', '豆包/对话'].filter(path => path.includes(query));
+  act(() => tab.updateRuntimeState());
+  const suggest = suggestHost.instances.at(-1) as { getSuggestions(query: string): string[]; selectSuggestion(path: string): void };
+  expect(suggest.getSuggestions('raw/')).toEqual(['raw/articles', 'raw/transcripts']);
+  await act(async () => suggest.selectSuggestion('raw/transcripts'));
+  expect(view.settings.folder).toBe('raw/transcripts');
+  expect(tab.containerEl.querySelector<HTMLInputElement>('input[aria-label="目标文件夹"]')?.value).toBe('raw/transcripts');
+});
 
 it('refreshes progress without losing input, focus, caret, disclosure or scroll', async () => {
   const { tab, view } = setup();

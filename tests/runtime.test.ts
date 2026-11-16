@@ -89,6 +89,16 @@ beforeEach(async () => {
 });
 afterEach(() => { plugin.onunload(); vi.useRealTimers(); });
 
+it('shows success only for explicit connection tests and clears it on failure', async () => {
+  await plugin.checkConnection();
+  expect(state.view!()).toMatchObject({ connection: 'connected', connectionMessage: '' });
+  await state.actions!.checkConnection();
+  expect(state.view!()).toMatchObject({ connection: 'connected', connectionMessage: '连接成功' });
+  state.listFails = true;
+  await state.actions!.checkConnection();
+  expect(state.view!()).toMatchObject({ connection: 'error', connectionMessage: '网络断开' });
+});
+
 it('persists message versions and per-conversation history across restarts without duplicates', async () => {
   await plugin.syncNow();
   expect(files.size).toBe(1);

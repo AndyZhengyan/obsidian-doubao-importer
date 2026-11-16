@@ -223,6 +223,7 @@
 }
 
 .doubao-credentials-message,
+.doubao-connection-success,
 .doubao-connection-error {
   display: block;
   width: 100%;
@@ -230,6 +231,10 @@
   font-size: 12px;
   line-height: 1.4;
   text-align: left;
+}
+
+.doubao-connection-success {
+  color: var(--color-green);
 }
 
 .doubao-credentials-message {
