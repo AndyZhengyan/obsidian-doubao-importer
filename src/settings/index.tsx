@@ -65,7 +65,7 @@ export function SettingsComponent({ app, view, actions }: { app: App; view: Sett
   return <div className="doubao-settings doubao-settings-react">
     <div className="doubao-settings-header">
       <h2>🔄 豆包 Sync <span className="doubao-settings-author">by 关山的月儿</span></h2>
-      <p className="doubao-settings-desc">豆包 → Obsidian，持续同步，保存为本地 Markdown， <ExternalLink href="https://github.com/AndyZhengyan/obsidian-getnote-importer/blob/main/README.md#关于作者">欢迎交流</ExternalLink></p>
+      <p className="doubao-settings-desc">豆包 → Obsidian，持续同步，保存为本地 Markdown， <ExternalLink href="https://github.com/AndyZhengyan/obsidian-getnote-importer/blob/main/README.md#-关于作者">欢迎交流</ExternalLink></p>
     </div>
     <div className={`doubao-settings-status-bar${credentialsOpen ? ' is-credentials-open' : ''}`} data-settings-status>
       <div className="doubao-settings-status-copy">
