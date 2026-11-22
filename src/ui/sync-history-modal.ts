@@ -70,7 +70,7 @@ class SyncHistoryModal extends Modal {
     const body = this.append(details, 'div', '', 'doubao-history-entry-body');
     const meta = this.append(body, 'div', '', 'doubao-history-meta-grid');
     this.renderMeta(meta, '方式', mode);
-    this.renderMeta(meta, '参数', '最近会话范围');
+    this.renderMeta(meta, '参数', entry.scopeLabel ?? '最近会话范围');
     this.renderMeta(meta, '会话', `${entry.total} 条${entry.limited ? ' · 已达列表上限' : ''}`);
     this.renderMeta(meta, '结果', `${STATUS_LABELS[entry.status]} · ${this.formatDuration(entry.durationMs)}`);
     const summary = this.append(body, 'div', '', 'doubao-history-summary-grid');

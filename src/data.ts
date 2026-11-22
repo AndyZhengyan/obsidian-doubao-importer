@@ -33,11 +33,11 @@ function timeValue(value: unknown): string {
   return typeof value === 'string' || typeof value === 'number' ? String(value) : '';
 }
 
-export function parseConversationList(payload: unknown): Conversation[] {
+export function parseConversationPage(payload: unknown) {
   const body = record(record(record(payload).downlink_body).pull_recent_conv_chain_downlink_body);
   if (!Array.isArray(body.cells)) throw new Error('豆包会话列表响应格式已变化');
   const seen = new Set<string>();
-  return body.cells.flatMap(cell => {
+  const conversations = body.cells.flatMap(cell => {
     const source = record(record(cell).conversation);
     const id = stringId(source.conversation_id);
     if (!id || seen.has(id)) return [];
@@ -49,6 +49,11 @@ export function parseConversationList(payload: unknown): Conversation[] {
       modified: timeValue(source.update_time),
     }];
   });
+  return { conversations, hasMore: body.has_more, nextVersion: body.next_conv_version };
+}
+
+export function parseConversationList(payload: unknown): Conversation[] {
+  return parseConversationPage(payload).conversations;
 }
 
 function parseText(source: RecordValue): string {
@@ -129,10 +134,14 @@ function yaml(value: string): string {
   return JSON.stringify(value.replace(/\r?\n/g, ' '));
 }
 
-function formatTime(value: string): string {
-  if (!/^\d+$/.test(value)) return '';
+export function timestampMs(value: string): number {
+  if (!/^\d+$/.test(value)) return NaN;
   const number = Number(value);
-  const date = new Date(value.length > 12 ? number : number * 1000);
+  return new Date(value.length > 12 ? number : number * 1000).getTime();
+}
+
+function formatTime(value: string): string {
+  const date = new Date(timestampMs(value));
   if (Number.isNaN(date.getTime())) return '';
   const pad = (part: number) => String(part).padStart(2, '0');
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;

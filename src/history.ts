@@ -26,6 +26,7 @@ export function normalizeHistory(value: unknown, now = Date.now()): SyncHistoryE
       durationMs: Math.max(0, finishedAt - entry.startedAt), source: entry.source === 'auto' ? 'auto' : 'manual', status,
       created: count(entry.created), updated: count(entry.updated), skipped: count(entry.skipped), failed: count(entry.failed), total: count(entry.total),
       items, limited: entry.limited === true,
+      ...(typeof entry.scopeLabel === 'string' ? { scopeLabel: entry.scopeLabel } : {}),
       ...(interrupted ? { error: '上次任务因插件重载或退出而中断，已保留完成结果' } : typeof entry.error === 'string' ? { error: entry.error } : {}),
     } satisfies SyncHistoryEntry];
   });

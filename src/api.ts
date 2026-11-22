@@ -1,4 +1,4 @@
-import { parseConversationList, parseMessagePage, type Conversation, type Message } from './data';
+import { parseConversationList, parseConversationPage, parseMessagePage, type Conversation, type Message } from './data';
 import { verifyLoginSession, watchLogin } from './login';
 import { createHash } from 'crypto';
 import { abortable, checkCancelled } from './cancellation';
@@ -49,18 +49,18 @@ function envelope(cmd: number, uplink_body: Record<string, unknown>): Record<str
   return { cmd, uplink_body, sequence_id: globalThis.crypto.randomUUID(), channel: 2, version: '1' };
 }
 
-export function buildRecentRequest(limit: number): Record<string, unknown> {
+export function buildRecentRequest(limit: number, cursor = 0): Record<string, unknown> {
   return envelope(3200, { pull_recent_conv_chain_uplink_body: {
     limit,
     message_count_per_conv: 0,
     api_version: 1,
-    conv_version: 0,
-    direction: 3,
+    conv_version: cursor,
+    direction: cursor ? 1 : 3,
     option: {
       not_need_message: true,
       need_complete_conversation: true,
-      need_coco_conversation: true,
-      need_coco_bot: true,
+      need_coco_conversation: cursor === 0,
+      need_coco_bot: cursor === 0,
     },
   } });
 }
@@ -214,6 +214,27 @@ export class DoubaoPage {
   async conversations(): Promise<Conversation[]> {
     const response = await this.post('/im/chain/recent_conv', buildRecentRequest(200));
     return parseConversationList(response);
+  }
+
+  async allConversations(onPage?: (page: number, count: number) => void): Promise<Conversation[]> {
+    const conversations = new Map<string, Conversation>();
+    let cursor = 0;
+    for (let pageNumber = 1; pageNumber <= 1000; pageNumber++) {
+      const response = await this.post('/im/chain/recent_conv', buildRecentRequest(100, cursor));
+      const page = parseConversationPage(response);
+      for (const conversation of page.conversations) {
+        if (!conversations.has(conversation.id)) conversations.set(conversation.id, conversation);
+      }
+      onPage?.(pageNumber, conversations.size);
+      if (page.hasMore === false) return [...conversations.values()];
+      const raw = page.nextVersion;
+      const next = typeof raw === 'number' || (typeof raw === 'string' && /^\d+$/.test(raw)) ? Number(raw) : NaN;
+      if (page.hasMore !== true || !Number.isSafeInteger(next) || next <= 0 || (cursor > 0 && next >= cursor)) {
+        throw new Error('豆包会话列表分页未能继续，未开始写入笔记。');
+      }
+      cursor = next;
+    }
+    throw new Error('豆包会话列表超过 1000 页，未开始写入笔记。');
   }
 
   async version(conversationId: string): Promise<string> {

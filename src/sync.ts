@@ -29,6 +29,7 @@ export interface SyncResult {
 
 export interface SyncOptions {
   signal?: AbortSignal;
+  fullList?: boolean;
   previousVersions?: Record<string, string>;
   onConversation?: (conversation: Conversation) => void;
   onPage?: (page: number, count: number) => void;
@@ -66,7 +67,7 @@ export async function syncConversations(
     throw new SyncInterruptedError(error instanceof Error ? error.message : String(error), { ...result, status: 'failed' }, error instanceof DoubaoAuthError ? 'auth' : 'failed');
   }
   result.total = conversations.length;
-  result.limited = conversations.length >= 200;
+  result.limited = !options.fullList && conversations.length >= 200;
   let done = 0;
   onProgress?.(0, conversations.length);
   for (const conversation of conversations) {

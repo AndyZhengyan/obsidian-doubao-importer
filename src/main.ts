@@ -7,9 +7,11 @@ import { normalizeSettings } from './settings-data';
 import { retainHistory } from './history';
 import { DoubaoSettingsTab } from './settings-tab';
 import { openSyncHistoryModal } from './ui/sync-history-modal';
+import { openManualSyncModal } from './ui/manual-sync-modal';
+import { timestampMs } from './data';
 import { showError, showInfo, showSuccess } from './ui/notice';
 import { CONNECTION_LABELS, PHASE_LABELS } from './ui/text';
-import type { ConnectionState, Settings, SettingsActions, SettingsView, SyncHistoryEntry, TaskState } from './types';
+import type { ConnectionState, ManualSyncScope, Settings, SettingsActions, SettingsView, SyncHistoryEntry, TaskState } from './types';
 
 export default class DoubaoSyncPlugin extends Plugin {
   settings: Settings = normalizeSettings(null);
@@ -32,17 +34,17 @@ export default class DoubaoSyncPlugin extends Plugin {
     this.settings = normalizeSettings(await this.loadData());
     const actions: SettingsActions = {
       login: () => this.openLogin(), logout: () => this.logout(), checkConnection: () => this.checkConnection(true),
-      sync: () => this.syncNow(), cancel: () => this.cancelSync(), update: (key, value) => this.updateSetting(key, value),
+      sync: async () => this.openManualSync(), cancel: () => this.cancelSync(), update: (key, value) => this.updateSetting(key, value),
       folders: query => this.app.vault.getAllFolders().map(folder => folder.path).filter(path => path.toLowerCase().includes(query.toLowerCase())),
       showHistory: () => openSyncHistoryModal(this.app, this.settings.syncHistory),
     };
     this.settingsTab = new DoubaoSettingsTab(this.app, this, () => this.view(), actions);
     this.addSettingTab(this.settingsTab);
-    this.addCommand({ id: 'sync-now', name: '立即同步豆包对话', callback: () => { void this.syncNow(); } });
+    this.addCommand({ id: 'sync-now', name: '按时间同步豆包对话', callback: () => this.openManualSync() });
     this.addCommand({ id: 'open-login', name: '登录豆包', callback: () => this.openLogin() });
     this.addCommand({ id: 'cancel-sync', name: '取消豆包同步', callback: () => this.cancelSync() });
     this.addCommand({ id: 'sync-history', name: '查看豆包同步日志', callback: () => actions.showHistory() });
-    this.addRibbonIcon('messages-square', '同步豆包对话', () => { void this.syncNow(); });
+    this.addRibbonIcon('messages-square', '同步豆包对话', () => this.openManualSync());
     this.statusEl = this.addStatusBarItem();
     this.updateView();
     this.resetTimer();
@@ -171,7 +173,16 @@ export default class DoubaoSyncPlugin extends Plugin {
     this.controller.abort();
   }
 
-  syncNow(automatic = false): Promise<void> {
+  private openManualSync(): void {
+    if (this.unloaded) return;
+    if (this.currentJob) {
+      showInfo('同步正在进行，请等待完成，或点击「取消同步」。');
+      return;
+    }
+    openManualSyncModal(this.app, scope => { void this.syncNow(false, scope); });
+  }
+
+  syncNow(automatic = false, scope?: ManualSyncScope): Promise<void> {
     if (this.unloaded) return Promise.resolve();
     if (this.currentJob) {
       if (!automatic) showInfo('同步正在进行，请等待完成，或点击「取消同步」。');
@@ -179,7 +190,7 @@ export default class DoubaoSyncPlugin extends Plugin {
     }
     this.connectionController?.abort();
     this.connectionController = null;
-    this.currentJob = this.runSync(automatic).finally(() => { this.currentJob = null; });
+    this.currentJob = this.runSync(automatic, scope).finally(() => { this.currentJob = null; });
     return this.currentJob;
   }
 
@@ -193,7 +204,7 @@ export default class DoubaoSyncPlugin extends Plugin {
     });
   }
 
-  private async runSync(automatic: boolean): Promise<void> {
+  private async runSync(automatic: boolean, scope?: ManualSyncScope): Promise<void> {
     this.clearResultTimer();
     const controller = new AbortController();
     this.controller = controller;
@@ -201,6 +212,7 @@ export default class DoubaoSyncPlugin extends Plugin {
     this.updateView();
     const startedAt = Date.now();
     const entry: SyncHistoryEntry = { id: crypto.randomUUID(), startedAt, finishedAt: 0, durationMs: 0, source: automatic ? 'auto' : 'manual', status: 'running', created: 0, updated: 0, skipped: 0, failed: 0, total: 0, items: [], limited: false };
+    if (scope) entry.scopeLabel = scope.label;
     this.settings.syncHistory = retainHistory([...this.settings.syncHistory, entry]);
     let result = emptySyncResult(this.settings.checkpoints, this.settings.messageVersions);
     try {
@@ -215,17 +227,28 @@ export default class DoubaoSyncPlugin extends Plugin {
       result = await api.withAuthenticatedPage(page => {
         const port = this.vaultPort(index, controller.signal);
         return syncConversations({ ...port, list: async () => {
-          const conversations = await page.conversations();
+          const conversations = scope
+            ? await page.allConversations((number, count) => {
+              this.task = { ...this.task, message: `读取会话列表第 ${number} 页，已发现 ${count} 个会话…` };
+              this.updateView();
+            })
+            : await page.conversations();
           this.connection = 'connected';
           this.connectionMessage = '';
           this.updateView();
-          return conversations;
+          if (!scope || scope.cutoff === 0) return conversations;
+          return conversations.filter(conversation => {
+            const modified = timestampMs(conversation.modified);
+            const date = Number.isFinite(modified) ? modified : timestampMs(conversation.created);
+            // Keep undated conversations so missing metadata cannot omit history.
+            return !Number.isFinite(date) || date >= scope.cutoff;
+          });
         }, messages: (id, onPage) => page.messages(id, onPage), version: id => page.version(id) },
           this.settings.checkpoints, folder, (processed, total) => {
             this.task = { ...this.task, processed, total };
             this.updateView();
           }, {
-            signal: controller.signal, previousVersions: this.settings.messageVersions,
+            signal: controller.signal, previousVersions: this.settings.messageVersions, fullList: Boolean(scope),
             onConversation: conversation => {
               this.task = { ...this.task, phase: 'reading', message: PHASE_LABELS.reading, currentTitle: conversation.title || '无标题对话', page: undefined, messageCount: undefined };
               this.updateView();

@@ -1,4 +1,8 @@
 export type ConnectionState = 'unverified' | 'checking' | 'connected' | 'signed-out' | 'expired' | 'error';
+export interface ManualSyncScope {
+  label: string;
+  cutoff: number;
+}
 export type TaskPhase = 'idle' | 'listing' | 'reading' | 'writing' | 'success' | 'partial' | 'failed' | 'cancelled';
 export interface TaskState {
   running: boolean;
@@ -30,6 +34,7 @@ export interface SyncHistoryEntry {
   total: number;
   items: SyncItem[];
   limited: boolean;
+  scopeLabel?: string;
   error?: string;
 }
 export interface Settings {

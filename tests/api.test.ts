@@ -3,6 +3,29 @@ import { buildMessageRequest, buildRecentRequest, DoubaoApiClient, DoubaoPage } 
 
 afterEach(() => vi.unstubAllGlobals());
 
+it('follows conversation-list cursors and deduplicates across pages', async () => {
+  const requests: string[] = [];
+  const page = new DoubaoPage({ setWindowOpenHandler() {}, async executeJavaScript(script: string) {
+    requests.push(script);
+    const first = requests.length === 1;
+    return { status: 200, text: JSON.stringify({ downlink_body: { pull_recent_conv_chain_downlink_body: {
+      cells: (first ? ['101'] : ['101', '102']).map(id => ({ conversation: { conversation_id: id } })),
+      has_more: first, next_conv_version: first ? 999 : 0,
+    } } }) };
+  } });
+  expect((await page.allConversations()).map(item => item.id)).toEqual(['101', '102']);
+  expect(requests[1]).toContain(String.raw`\"conv_version\":999`);
+});
+
+it('rejects a repeated list cursor instead of returning partial history', async () => {
+  const page = new DoubaoPage({ setWindowOpenHandler() {}, async executeJavaScript() {
+    return { status: 200, text: JSON.stringify({ downlink_body: { pull_recent_conv_chain_downlink_body: {
+      cells: [], has_more: true, next_conv_version: 999,
+    } } }) };
+  } });
+  await expect(page.allConversations()).rejects.toThrow('分页未能继续');
+});
+
 it('aborts an outstanding browser request without waiting for Electron to settle it', async () => {
   const controller = new AbortController();
   const page = new DoubaoPage({ setWindowOpenHandler: () => {}, executeJavaScript: () => new Promise(() => {}) }, controller.signal);

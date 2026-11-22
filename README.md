@@ -17,7 +17,8 @@ The plugin stores the web session in Electron's persistent local partition. It d
 
 ## Current behavior
 
-- Syncs the most recent conversations returned by Doubao's web conversation endpoint, up to 200 per run.
+- Manual sync opens a time-range dialog and follows the conversation-list cursor. It filters by last update, falls back to creation time, and retains undated conversations. Matching conversations are imported in full.
+- Automatic sync requests up to 200 recent conversations per run.
 - Paginates each conversation's history. A conversation that exceeds 1000 message pages or returns a repeated page is skipped rather than written incompletely.
 - Saves one Markdown note per conversation under `豆包/对话` by default.
 - Updates notes by their `uid`, even if moved or renamed. It preserves frontmatter fields outside plugin ownership and text outside the source-body markers.

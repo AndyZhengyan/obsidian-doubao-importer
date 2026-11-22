@@ -47,6 +47,7 @@ vi.mock('../src/api', async importOriginal => {
       checkCancelled(signal);
       return action({
         conversations: async () => { if (state.listFails) throw new Error('网络断开'); return state.list; },
+        allConversations: async () => state.list,
         version: async (id: string) => { if (id === state.authId) throw new actual.DoubaoAuthError(); return state.version; },
         messages: async (id: string, progress?: (page: number, count: number) => void) => {
           state.calls++;
@@ -88,6 +89,16 @@ beforeEach(async () => {
   await plugin.onload();
 });
 afterEach(() => { plugin.onunload(); vi.useRealTimers(); });
+
+it('writes only conversations matched by the manual date scope and records it in history', async () => {
+  state.list = [conversation, { ...conversation, id: '456', modified: '1690000000' }];
+  await plugin.syncNow(false, { label: '自指定日期起', cutoff: 1700000000000 });
+  expect(state.calls).toBe(1);
+  expect(files.size).toBe(1);
+  expect(plugin.settings.syncHistory.at(-1)).toMatchObject({
+    scopeLabel: '自指定日期起', total: 1, items: [{ id: '123' }],
+  });
+});
 
 it('clears the manual result after three seconds and keeps it in history', async () => {
   vi.useFakeTimers();
