@@ -65,13 +65,13 @@ export function SettingsComponent({ app, view, actions }: { app: App; view: Sett
   return <div className="doubao-settings doubao-settings-react">
     <div className="doubao-settings-header">
       <h2>🔄 豆包 Sync <span className="doubao-settings-author">by 关山的月儿</span></h2>
-      <p className="doubao-settings-desc">豆包 → Obsidian，持续同步，保存为本地 Markdown， <ExternalLink href="https://github.com/AndyZhengyan/obsidian-doubao-importer#readme">欢迎交流、留下star</ExternalLink></p>
+      <p className="doubao-settings-desc">豆包 → Obsidian，持续同步，保存为本地 Markdown， <ExternalLink href="https://github.com/AndyZhengyan/obsidian-getnote-importer/blob/main/README.md#关于作者">欢迎交流</ExternalLink></p>
     </div>
     <div className={`doubao-settings-status-bar${credentialsOpen ? ' is-credentials-open' : ''}`} data-settings-status>
       <div className="doubao-settings-status-copy">
         <strong>豆包网页登录</strong>
         <span className={`doubao-connection-health doubao-connection-health--${connection}`} role="status"><span className="doubao-connection-health-dot" aria-hidden="true" />{CONNECTION_LABELS[connection]}</span>
-        <span>当前状态: {task.running ? '同步中' : PHASE_LABELS[task.phase]}</span>
+        <span>当前状态: {task.running ? '同步中' : settings.syncHistory.at(-1)?.status === 'failed' ? '上次同步失败' : PHASE_LABELS.idle}</span>
         <span>上次同步: {Number.isFinite(timestamp.getTime())
           ? <time dateTime={timestamp.toISOString()} title={timestamp.toLocaleString()}>{lastSync}</time>
           : lastSync}</span>
@@ -98,8 +98,8 @@ export function SettingsComponent({ app, view, actions }: { app: App; view: Sett
         aria-valuemin={0} aria-valuemax={100} aria-valuenow={percent} aria-valuetext={`已处理 ${task.processed}${task.total === undefined ? '' : ` / ${task.total}`} 个会话`}>
         {determinate && <div className="doubao-settings-progress-fill" style={{ width: `${percent}%` }} />}</div>
         {determinate && <span className="doubao-settings-progress-percent">{percent}%</span>}</div>}
-      <div className="doubao-settings-progress-count">会话：{task.processed}{task.total !== undefined ? ` / ${task.total}` : ''}{task.page !== undefined && ` · 第 ${task.page} 页`}{task.messageCount !== undefined && ` · 已读取 ${task.messageCount} 条消息`}</div>
-      {task.currentTitle && <div className="doubao-settings-progress-count doubao-task-title">{task.currentTitle}</div>}
+      {task.running && <div className="doubao-settings-progress-count">会话：{task.processed}{task.total !== undefined ? ` / ${task.total}` : ''}{task.page !== undefined && ` · 第 ${task.page} 页`}{task.messageCount !== undefined && ` · 已读取 ${task.messageCount} 条消息`}</div>}
+      {task.running && task.currentTitle && <div className="doubao-settings-progress-count doubao-task-title">{task.currentTitle}</div>}
       {!task.running && settings.lastSummary && <div className="doubao-settings-progress-count">{settings.lastSummary}</div>}
     </div>}
     {operationError && <p role="alert" className="doubao-connection-error">{operationError}</p>}

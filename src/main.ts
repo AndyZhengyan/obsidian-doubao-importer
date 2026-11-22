@@ -18,6 +18,7 @@ export default class DoubaoSyncPlugin extends Plugin {
   private connectionController: AbortController | null = null;
   private currentJob: Promise<void> | null = null;
   private interval: number | null = null;
+  private resultTimer: number | null = null;
   private statusEl: HTMLElement | null = null;
   private settingsTab: DoubaoSettingsTab | null = null;
   private connection: ConnectionState = 'unverified';
@@ -54,6 +55,7 @@ export default class DoubaoSyncPlugin extends Plugin {
 
   onunload(): void {
     this.unloaded = true;
+    this.clearResultTimer();
     if (this.interval !== null) window.clearInterval(this.interval);
     this.controller?.abort();
     this.connectionController?.abort();
@@ -192,6 +194,7 @@ export default class DoubaoSyncPlugin extends Plugin {
   }
 
   private async runSync(automatic: boolean): Promise<void> {
+    this.clearResultTimer();
     const controller = new AbortController();
     this.controller = controller;
     this.task = { running: true, phase: 'listing', message: PHASE_LABELS.listing, processed: 0 };
@@ -248,16 +251,24 @@ export default class DoubaoSyncPlugin extends Plugin {
     this.settings.syncHistory = retainHistory(this.settings.syncHistory);
     this.settings.lastSyncAt = new Date(entry.finishedAt).toISOString();
     this.settings.lastSummary = `新增 ${result.created} · 更新 ${result.updated} · 跳过 ${result.skipped} · 失败 ${result.failed}`;
-    const message = result.status === 'success' && result.created + result.updated === 0 ? '同步完成，没有新的变化' : PHASE_LABELS[result.status];
-    this.task = { ...this.task, running: false, phase: result.status, message };
+    const message = result.status === 'success' && result.created + result.updated === 0 ? '无需同步' : PHASE_LABELS[result.status];
+    this.task = { running: false, phase: result.status, message, processed: result.items.length };
     this.controller = null;
     let saveError = '';
     try { await this.persist(); } catch (error) {
       this.task = { ...this.task, phase: 'failed', message: '同步记录保存失败' };
       saveError = `同步记录保存失败：${error instanceof Error ? error.message : String(error)}。已写入的笔记会保留，请检查磁盘空间和仓库写入权限后重试。`;
     }
-    this.updateView();
     if (this.unloaded) return;
+    if (automatic && result.status === 'success' && !result.limited && !saveError) {
+      this.resetTask();
+    } else {
+      this.updateView();
+      this.resultTimer = window.setTimeout(() => {
+        this.resultTimer = null;
+        this.resetTask();
+      }, 3000);
+    }
     const failed = result.status === 'failed' || result.status === 'partial';
     const originalError = entry.error || result.errors[0]?.message;
     const advice = this.connection === 'signed-out' || this.connection === 'expired'
@@ -277,6 +288,16 @@ export default class DoubaoSyncPlugin extends Plugin {
       else showSuccess(detail);
     }
     if (automatic || !issue) this.lastAutomaticIssue = issue;
+  }
+
+  private clearResultTimer(): void {
+    if (this.resultTimer !== null) window.clearTimeout(this.resultTimer);
+    this.resultTimer = null;
+  }
+
+  private resetTask(): void {
+    this.task = { running: false, phase: 'idle', message: PHASE_LABELS.idle, processed: 0 };
+    this.updateView();
   }
 
   private vaultPort(index: Map<string, string[]>, signal: AbortSignal): Omit<SyncPort, 'list' | 'messages'> {

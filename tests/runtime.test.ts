@@ -89,6 +89,23 @@ beforeEach(async () => {
 });
 afterEach(() => { plugin.onunload(); vi.useRealTimers(); });
 
+it('clears the manual result after three seconds and keeps it in history', async () => {
+  vi.useFakeTimers();
+  await plugin.syncNow();
+  expect(state.view!().task).toMatchObject({ phase: 'success', running: false });
+  expect(state.view!().task.currentTitle).toBeUndefined();
+  await vi.advanceTimersByTimeAsync(3000);
+  expect(state.view!().task.phase).toBe('idle');
+  expect(plugin.settings.syncHistory.at(-1)).toMatchObject({ status: 'success', created: 1 });
+});
+
+it('returns directly to idle after a scheduled run without changes', async () => {
+  await plugin.syncNow();
+  await plugin.syncNow(true);
+  expect(state.view!().task.phase).toBe('idle');
+  expect(plugin.settings.syncHistory.at(-1)).toMatchObject({ status: 'success', source: 'auto', skipped: 1 });
+});
+
 it('shows success only for explicit connection tests and clears it on failure', async () => {
   await plugin.checkConnection();
   expect(state.view!()).toMatchObject({ connection: 'connected', connectionMessage: '' });
