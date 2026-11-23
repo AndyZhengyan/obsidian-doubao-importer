@@ -1,0 +1,707 @@
+/* src/ui/history.css */
+.doubao-history-list {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.doubao-history-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 12px;
+}
+.doubao-history-page-button {
+  font-size: 12px;
+  padding: 4px 10px;
+}
+.doubao-history-page-label {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.doubao-history-entry {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  background: var(--background-primary);
+  overflow: hidden;
+}
+.doubao-history-entry.is-partial {
+  border-color: var(--text-warning);
+}
+.doubao-history-entry.is-failed {
+  border-color: var(--text-error);
+}
+.doubao-history-header {
+  font-weight: 500;
+  padding: 12px 14px;
+  cursor: pointer;
+  background: var(--background-secondary);
+}
+.doubao-history-warning-icon {
+  margin-right: 4px;
+  color: var(--text-error);
+  font-weight: 700;
+}
+.doubao-history-status-text.is-success {
+  color: var(--text-success);
+}
+.doubao-history-status-text.is-partial {
+  color: var(--text-warning);
+}
+.doubao-history-status-text.is-failed {
+  color: var(--text-error);
+}
+.doubao-history-header-counts {
+  color: var(--text-muted);
+  font-size: var(--font-smaller);
+  font-weight: 400;
+}
+.doubao-history-entry-body {
+  padding: 12px 14px 14px;
+}
+.doubao-history-detail {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.doubao-history-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.doubao-history-meta-item {
+  min-width: 0;
+  padding: 8px;
+  border-radius: 6px;
+  background: var(--background-secondary);
+}
+.doubao-history-meta-label {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.doubao-history-meta-value {
+  display: block;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.doubao-history-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.doubao-history-summary-card {
+  padding: 8px;
+  border-radius: 6px;
+  text-align: center;
+  font-size: 12px;
+  background: var(--background-secondary);
+}
+.doubao-history-summary-failed {
+  color: var(--text-error);
+}
+.doubao-history-entry-body h3 {
+  margin: 8px 0;
+  font-size: 13px;
+}
+.doubao-history-item-group {
+  border-top: 1px solid var(--background-modifier-border);
+  padding: 8px 0;
+}
+.doubao-history-item-summary {
+  font-size: 12px;
+  font-weight: 600;
+}
+.doubao-history-item-summary.failed {
+  color: var(--text-error);
+}
+.doubao-history-item-summary.created {
+  color: var(--text-success);
+}
+.doubao-history-item-summary.updated {
+  color: var(--interactive-accent);
+}
+.doubao-history-item-summary.synced {
+  color: var(--text-normal);
+}
+.doubao-history-item-summary.skipped {
+  color: var(--text-muted);
+}
+.doubao-history-synced-details {
+  border-top: 1px solid var(--background-modifier-border);
+  padding: 10px 0;
+}
+.doubao-history-write-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+.doubao-history-write-row {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  padding: 8px;
+  border-radius: 6px;
+  background: var(--background-secondary);
+}
+.doubao-history-status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 22px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  background: var(--background-primary);
+}
+.doubao-history-status-pill.created {
+  color: var(--text-success);
+}
+.doubao-history-status-pill.updated {
+  color: var(--interactive-accent);
+}
+.doubao-history-write-body {
+  min-width: 0;
+}
+.doubao-history-item-list {
+  margin: 8px 0 0;
+  padding-left: 18px;
+}
+.doubao-history-note-row {
+  margin: 6px 0;
+}
+.doubao-history-note-title {
+  display: block;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.doubao-history-note-meta {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.doubao-history-item-empty {
+  margin-top: 6px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.doubao-history-error {
+  font-size: 12px;
+  color: var(--text-error);
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+.doubao-history-empty {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.doubao-history-warning {
+  color: var(--text-warning);
+  font-size: 12px;
+}
+@media (max-width: 640px) {
+  .doubao-history-meta-grid,
+  .doubao-history-summary-grid {
+    grid-template-columns: 1fr;
+  }
+  .doubao-history-pagination {
+    justify-content: space-between;
+  }
+}
+
+/* src/styles.css */
+.doubao-settings-react {
+  padding: 0;
+  --doubao-primary-input-width: 360px;
+  --doubao-primary-input-min-width: 220px;
+  --doubao-secondary-input-width: 180px;
+  --doubao-secondary-input-min-width: 120px;
+  --doubao-nested-setting-gap: 12px;
+}
+.doubao-settings [hidden] {
+  display: none !important;
+}
+.doubao-settings-status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 20px;
+  padding: 12px 14px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  background: var(--background-secondary);
+}
+.doubao-settings-status-copy,
+.doubao-settings-status-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+}
+.doubao-settings-status-copy span {
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+.doubao-settings-status-actions {
+  justify-content: flex-end;
+}
+.doubao-settings-status-bar.is-credentials-open {
+  margin-bottom: 0;
+  border-radius: var(--radius-m) var(--radius-m) 0 0;
+}
+.doubao-credential-panel {
+  margin: 0 0 20px;
+  padding: 14px;
+  border: 1px solid var(--background-modifier-border);
+  border-top: 0;
+  border-radius: 0 0 var(--radius-m) var(--radius-m);
+  background: var(--background-secondary);
+}
+.doubao-credential-panel .doubao-setting-item {
+  margin-bottom: 0;
+}
+.doubao-settings-section {
+  width: 100%;
+}
+.doubao-settings-advanced {
+  margin: 8px 0 16px;
+  border-top: 1px solid var(--background-modifier-border);
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+.doubao-section-disclosure {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 28px;
+  padding: 4px 0 4px 12px;
+  border: 0;
+  border-left: 2px solid var(--background-modifier-border);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  font-weight: 500;
+  text-align: left;
+  box-shadow: none;
+}
+.doubao-settings-sync .doubao-section-disclosure,
+.doubao-settings-advanced .doubao-section-disclosure {
+  min-height: 58px;
+  padding: 10px 12px;
+  border-left: 0;
+}
+.doubao-section-disclosure:hover {
+  color: var(--text-normal);
+  border-left-color: var(--text-accent);
+  background: transparent;
+}
+.doubao-section-disclosure-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.doubao-section-disclosure-copy strong {
+  color: var(--text-normal);
+  font-size: var(--font-ui-medium);
+}
+.doubao-section-disclosure-copy small,
+.doubao-setting-summary {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  font-weight: 400;
+}
+.doubao-setting-summary {
+  display: block;
+  margin-top: 3px;
+}
+.doubao-setting-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 16px;
+  width: 100%;
+}
+.doubao-setting-info {
+  min-width: 170px;
+  max-width: 220px;
+  flex-shrink: 0;
+}
+.doubao-setting-name {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.doubao-setting-description {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.doubao-setting-control {
+  display: flex;
+  justify-content: flex-end;
+  flex: 1;
+  min-width: 0;
+  overflow: visible;
+}
+.doubao-settings-header h2 {
+  margin: 0 0 4px;
+  padding-left: 0;
+  border-left: none;
+}
+.doubao-settings-author {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.doubao-settings-desc {
+  color: var(--text-muted);
+  margin: 0 0 16px;
+  padding-left: 0;
+  font-size: 13px;
+}
+.doubao-setting-control input[type=text],
+.doubao-input {
+  width: 100%;
+  max-width: var(--doubao-primary-input-width);
+  min-width: var(--doubao-primary-input-min-width);
+  box-sizing: border-box;
+}
+.doubao-scheduled-row input[type=number] {
+  width: var(--doubao-secondary-input-width);
+  max-width: var(--doubao-secondary-input-width);
+  min-width: var(--doubao-secondary-input-min-width);
+  box-sizing: border-box;
+}
+.doubao-credentials-control {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  width: 100%;
+  max-width: var(--doubao-primary-input-width);
+}
+.doubao-credentials-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+}
+.doubao-credential-action-button,
+.doubao-settings-cancel-button,
+.doubao-view-history-btn {
+  font-size: 12px;
+  padding: 4px 10px;
+}
+.doubao-view-history-btn {
+  align-self: flex-end;
+  width: auto;
+}
+.doubao-credentials-message,
+.doubao-connection-success,
+.doubao-connection-error {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: left;
+}
+.doubao-connection-success {
+  color: var(--color-green);
+}
+.doubao-credentials-message {
+  color: var(--text-muted);
+}
+.doubao-connection-error {
+  color: var(--text-error);
+  overflow-wrap: anywhere;
+}
+.doubao-input-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+.doubao-input-hint-error {
+  color: var(--text-error);
+}
+.doubao-onboarding {
+  padding: 10px 14px;
+  margin-bottom: 16px;
+  background: var(--background-modifier-hover);
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--text-muted);
+  border-left: 3px solid var(--interactive-accent);
+}
+.doubao-onboarding--needs-credentials {
+  border-left-color: var(--color-orange);
+}
+.doubao-onboarding--ready {
+  border-left-color: var(--color-green);
+}
+.doubao-connection-health {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.doubao-connection-health-dot {
+  width: 8px;
+  height: 8px;
+  flex: 0 0 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.doubao-settings-status-copy .doubao-connection-health--unverified,
+.doubao-settings-status-copy .doubao-connection-health--checking,
+.doubao-settings-status-copy .doubao-connection-health--signed-out {
+  color: var(--text-muted);
+}
+.doubao-settings-status-copy .doubao-connection-health--connected {
+  color: var(--color-green);
+}
+.doubao-settings-status-copy .doubao-connection-health--error,
+.doubao-settings-status-copy .doubao-connection-health--expired {
+  color: var(--text-error);
+}
+.doubao-settings-status-copy .doubao-connection-health-dot {
+  color: inherit;
+}
+.doubao-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.doubao-manual-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: var(--doubao-primary-input-width);
+}
+.doubao-manual-action-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.doubao-manual-action-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-align: right;
+}
+.doubao-settings-sync-status {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  padding: 8px 12px;
+  background: var(--background-modifier-hover);
+  border-radius: 4px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+.doubao-settings-sync-status span {
+  color: var(--text-muted);
+}
+.doubao-settings-sync-status-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.doubao-settings-progress-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.doubao-settings-progress-track {
+  position: relative;
+  flex: 1;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--background-modifier-border);
+}
+.doubao-settings-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--interactive-accent);
+  transition: width 160ms ease-out;
+}
+.doubao-settings-progress-percent {
+  font-weight: bold;
+}
+.doubao-settings-progress-track.is-indeterminate::after {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 36%;
+  border-radius: inherit;
+  background: var(--interactive-accent);
+  content: "";
+  animation: doubao-sync-progress-indeterminate 1.1s ease-in-out infinite;
+}
+@keyframes doubao-sync-progress-indeterminate {
+  from {
+    transform: translateX(-120%);
+  }
+  to {
+    transform: translateX(340%);
+  }
+}
+.doubao-settings-progress-count {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.doubao-task-title {
+  overflow-wrap: anywhere;
+}
+.doubao-mono-text {
+  font-family: monospace;
+}
+.doubao-muted-text {
+  color: var(--text-muted);
+}
+.doubao-scheduled-control {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: var(--doubao-primary-input-width);
+}
+.doubao-sync-log-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-width: var(--doubao-primary-input-width);
+}
+.doubao-scheduled-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+.doubao-scheduled-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 0;
+  gap: var(--doubao-nested-setting-gap);
+  width: 100%;
+}
+.doubao-scheduled-row-label {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 500;
+  color: var(--text-normal);
+}
+.doubao-scheduled-rows .doubao-scheduled-row-label {
+  text-align: right;
+  font-weight: 400;
+}
+.doubao-scheduled-master-row .doubao-scheduled-row-label {
+  text-align: left;
+}
+.doubao-scheduled-row-control {
+  display: flex;
+  flex: 0 0 var(--doubao-secondary-input-width);
+  justify-content: flex-end;
+  align-items: center;
+  min-width: var(--doubao-secondary-input-min-width);
+  text-align: right;
+}
+.doubao-inline-disclosure {
+  margin-left: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-accent);
+  font-size: var(--font-ui-small);
+  text-decoration: underline;
+  cursor: pointer;
+  box-shadow: none;
+}
+.doubao-inline-disclosure:hover {
+  color: var(--text-accent-hover, var(--text-accent));
+  text-decoration: underline;
+}
+.doubao-scheduled-row-control .doubao-inline-disclosure {
+  line-height: 1.4;
+}
+.doubao-disclosure-caret {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  color: var(--text-muted);
+  line-height: 1;
+}
+.doubao-disclosure-caret::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg);
+  transition: transform 120ms ease;
+}
+.doubao-disclosure-caret.is-open::before {
+  transform: rotate(225deg);
+}
+@media (max-width: 700px) {
+  .doubao-setting-item {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .doubao-setting-info {
+    max-width: none;
+  }
+  .doubao-setting-control {
+    justify-content: flex-start;
+    width: 100%;
+  }
+  .doubao-credentials-control,
+  .doubao-scheduled-control {
+    max-width: none;
+  }
+  .doubao-actions-row,
+  .doubao-credentials-actions {
+    justify-content: flex-start;
+  }
+  .doubao-settings-status-bar,
+  .doubao-settings-status-copy {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .doubao-settings-status-actions {
+    justify-content: flex-start;
+    width: 100%;
+  }
+  .doubao-scheduled-master-row {
+    align-items: flex-start;
+  }
+}
+.doubao-notice-success,
+.doubao-notice-success .notice-content {
+  color: var(--color-green);
+  font-weight: 500;
+}
+.doubao-notice-error,
+.doubao-notice-error .notice-content {
+  color: #e55353;
+  font-weight: 500;
+}
