@@ -13,7 +13,11 @@ Doubao Sync is a sister plugin to [Dedao Brain Sync](https://github.com/AndyZhen
 5. Open Settings → Doubao Sync → credentials (更改凭证) → web login (网页登录). Complete the normal login; the window closes after server verification and the status shows authentication success (认证成功).
 6. Choose the target folder (目标文件夹), then use manual sync (手动同步 → 同步对话). New installations start in manual mode; enable automatic sync only when wanted. The UI currently uses Simplified Chinese.
 
-The plugin stores the web session in Electron's persistent local partition. It does not copy Cookie values into plugin settings or log them.
+## Account, network, and privacy
+
+A Doubao account and network access are required for sync. The plugin connects to `www.doubao.com` to sign in, check the session, and read your conversation list and messages. It writes imported content and sync metadata to your local vault. Electron stores the web session locally in a dedicated partition. The plugin does not copy cookie values into its settings or logs.
+
+Licensed under [MIT](LICENSE). Settings components and interaction patterns adapted from [Dedao Brain Sync](https://github.com/AndyZhengyan/obsidian-getnote-importer) retain the original MIT attribution.
 
 ## Current behavior
 
