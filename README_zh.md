@@ -1,10 +1,12 @@
 # 豆包同步
 
-把豆包对话同步为本地 Obsidian Markdown。桌面端提供内置登录、手动/自动同步、实时页数进度、取消和最近30天逐会话日志。设置组件、反馈方式和 frontmatter 沿用「得到大脑同步」的成熟设计，见[复用边界](docs/REUSE.md)。
+[English](README.md)
 
-## 本地安装
+豆包同步是[得到大脑同步](https://github.com/AndyZhengyan/obsidian-getnote-importer)的姊妹插件，把豆包对话保存为 Obsidian 本地 Markdown。桌面端支持网页登录、按时间手动同步、定时同步、取消和最近 30 天的逐会话日志。设置交互和笔记格式沿用同一套设计，见[复用说明](docs/REUSE.md)。
 
-1. 在项目目录运行 `npm install` 和 `npm run build`。
+## 在 Obsidian 桌面端安装
+
+1. 从 [GitHub Releases](https://github.com/AndyZhengyan/obsidian-doubao-importer/releases) 下载 `main.js`、`manifest.json`、`styles.css`。
 2. 在目标 vault 下创建 `.obsidian/plugins/doubao-sync/`。
 3. **只复制** `main.js`、`manifest.json`、`styles.css` 到这个目录。
 4. 在 Obsidian「设置 → 第三方插件」启用「Doubao Sync」。更新已启用的插件时，仅关闭后重新启用此插件即可加载新版本，无需重载整个应用。
@@ -14,6 +16,8 @@
 登录态保存在本机 Electron 独立会话中，插件设置和日志不保存 Cookie 明文。
 
 ## 使用与反馈
+
+实际验收中，「不限时间」手动同步翻页处理了 277 个会话，失败 0。每个账号能同步多少，取决于豆包返回的可见会话。
 
 - 「自动同步」默认收起详情，摘要显示间隔、启动策略和仅下载模式。展开后可填写 5–1440 分钟的整数，非法输入不会保存。新装默认周期 30 分钟，启动时同步勾选但仅在自动同步开启时生效；升级不会更改已有配置。
 - 当前状态与上次同步位于顶部；任务开始后，在同一位置查看会话处理进度、当前标题、页数及消息数。获取列表时不伪造百分比，百分比仅表示已完成会话数量的比例。

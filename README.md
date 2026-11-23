@@ -2,11 +2,11 @@
 
 [简体中文](README_zh.md)
 
-Sync your Doubao conversations into local Obsidian Markdown notes. This desktop plugin includes local login, manual/scheduled sync, live message-page progress, cancellation, and 30-day per-conversation history. Its settings components and interaction patterns are adapted from Dedao Brain Sync; see [reuse boundaries](docs/REUSE.md).
+Doubao Sync is a sister plugin to [Dedao Brain Sync](https://github.com/AndyZhengyan/obsidian-getnote-importer). It saves Doubao conversations as local Markdown in Obsidian Desktop, with time-range sync, scheduled updates, cancellation, and 30-day history. See [how the projects share their design](docs/REUSE.md).
 
-## Install for local testing
+## Install on Obsidian Desktop
 
-1. Run `npm install` and `npm run build` in this repository.
+1. Download `main.js`, `manifest.json`, and `styles.css` from [GitHub Releases](https://github.com/AndyZhengyan/obsidian-doubao-importer/releases).
 2. Create `<your-vault>/.obsidian/plugins/doubao-sync/`.
 3. Copy **only** `main.js`, `manifest.json`, and `styles.css` into that directory.
 4. In Obsidian, enable Doubao Sync under Community plugins. For an update, disable and re-enable only this plugin; a full app reload is unnecessary.
