@@ -172,7 +172,7 @@ export function SettingsComponent({ app, view, actions }: { app: App; view: Sett
       <div id={advancedId} hidden={!advancedOpen}>
         <SettingItem name="同步范围" description="自动同步扫描近期列表。手动同步翻页读取豆包返回的会话列表，每个会话最多读取 1000 页消息。"><span className="doubao-muted-text">单向下载</span></SettingItem>
         <SettingItem name="笔记保护" description="仅更新本插件管理的正文区域，保留手写批注和自定义属性。远端对话消失不会删除本地笔记。"><span className="doubao-muted-text">按 uid 识别已有笔记</span></SettingItem>
-        <SettingItem name="登录与内容" description="登录态仅保存在本机独立会话中。当前不提供附件下载、双向同步或移动端同步。"><ExternalLink href="https://github.com/AndyZhengyan/obsidian-doubao-importer/blob/codex/mvp/README_zh.md">查看使用说明</ExternalLink></SettingItem>
+        <SettingItem name="登录与内容" description="登录态仅保存在本机独立会话中。当前不提供附件下载、双向同步或移动端同步。"><ExternalLink href="https://github.com/AndyZhengyan/obsidian-doubao-importer/blob/main/README_zh.md">查看使用说明</ExternalLink></SettingItem>
       </div>
     </section>
   </div>;
