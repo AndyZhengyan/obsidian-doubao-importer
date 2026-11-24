@@ -1,7 +1,7 @@
 {
   "id": "doubao-sync",
   "name": "Doubao Sync",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Sync your Doubao conversations into local Markdown notes.",
   "author": "Andy Zheng",
   "isDesktopOnly": true,
